@@ -10,6 +10,13 @@ aiming for a specified 'done' time. Recipes should be able to be created and sav
 timings of their components configured. Multiple recipes should be able to be combined into a meal as
 individual dishes, and can be timed together."
 
+## Clarifications
+
+### Session 2026-02-25
+
+- Q: Persistence model — user accounts vs local storage? → A: Local device storage only; no accounts, no backend, no cloud sync in scope.
+- Q: Live timer — alarm and delay behaviour? → A: Each step has an individually togglable alarm that fires at the step's scheduled start time. The cook confirms the step has been *started* (not completed). Delay (+1/+5/+10 min) can be applied to a specific step, a specific dish (all remaining unstarted steps for that dish), or the whole meal (all remaining unstarted steps across all dishes).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Single-Dish Reverse Schedule (Priority: P1)
@@ -103,27 +110,40 @@ time with correct start times for each dish.
 ### User Story 4 - Live Countdown Timer (Priority: P4)
 
 A home cook has a calculated schedule and is actively cooking. They start a live timer session and
-the app counts down to each step's start time, alerting them when it is time to begin each step. They
-can mark steps as done and the schedule remains visible throughout the session.
+the app counts down to each step's start time. Each step has an individually togglable alarm that
+fires when the step's start time arrives, prompting the cook to confirm they have started that step.
+The cook can also delay any step, dish, or the entire meal by +1, +5, or +10 minutes at any point
+during the session. The full schedule remains visible throughout.
 
 **Why this priority**: The planning output is most useful when paired with real-time guidance during
 active cooking. This story closes the loop from planning to execution and is sequentially dependent
 on US1 (and optionally US3) being complete.
 
 **Independent Test**: Can be fully tested by generating any valid schedule, starting the live timer,
-and verifying that the app alerts the user when the clock reaches each step's calculated start time.
+and verifying that the app sounds an alarm (if enabled) when the clock reaches a step's start time,
+and that confirming start dismisses the alarm and marks the step as started.
 
 **Acceptance Scenarios**:
 
-1. **Given** an active timer session with the next step starting in 5 minutes, **When** that time
-   arrives, **Then** the app displays a prominent alert indicating which step to begin and for which
-   dish.
-2. **Given** an active timer session, **When** the cook marks a step as complete, **Then** that
-   step is visually distinguished as done and the next upcoming step is highlighted.
-3. **Given** an active timer session, **When** the cook navigates away from the timer screen and
+1. **Given** an active timer session with a step alarm enabled and that step's start time arriving,
+   **When** the clock reaches the scheduled start time, **Then** the app sounds the alarm and
+   displays a prominent prompt identifying the step and dish.
+2. **Given** an alarm prompt is displayed, **When** the cook confirms they have started the step,
+   **Then** the alarm dismisses and the step is marked as started in the schedule.
+3. **Given** an active timer session, **When** the cook toggles a step's alarm off, **Then** no
+   alarm fires for that step when its start time arrives; all other step alarms are unaffected.
+4. **Given** an active timer session, **When** the cook applies a +5 minute delay to a specific
+   step, **Then** that step's scheduled start time shifts forward by 5 minutes.
+5. **Given** an active timer session with multiple remaining steps for a dish, **When** the cook
+   applies a +10 minute delay to that dish, **Then** all remaining unstarted steps for that dish
+   shift forward by 10 minutes.
+6. **Given** an active timer session with a multi-dish meal, **When** the cook applies a +5 minute
+   delay to the whole meal, **Then** all remaining unstarted steps across all dishes shift forward
+   by 5 minutes.
+7. **Given** an active timer session, **When** the cook navigates away from the timer screen and
    returns, **Then** the timer has continued running accurately and reflects the current state.
-4. **Given** an active timer session where the current time has passed a step's start time without
-   the step being marked complete, **When** the cook views the schedule, **Then** that step is
+8. **Given** an active timer session where the current time has passed a step's start time without
+   the cook confirming it as started, **When** the cook views the schedule, **Then** that step is
    flagged as overdue.
 
 ---
@@ -144,6 +164,11 @@ and verifying that the app alerts the user when the clock reaches each step's ca
 - What if a saved recipe is loaded and then its steps are modified within the session? Changes in
   the session MUST NOT automatically overwrite the saved recipe; the cook MUST explicitly save to
   update it.
+- What if the cook applies a delay to a step that has already been confirmed as started? Delay
+  actions MUST be ignored for already-started steps (FR-029).
+- What if applying a delay pushes the whole meal's completion time past the original target?
+  The app MUST display the new effective completion time and warn the cook that the target time
+  will be missed by the cumulative delay applied.
 
 ## Requirements *(mandatory)*
 
@@ -200,11 +225,21 @@ and verifying that the app alerts the user when the clock reaches each step's ca
 #### Live Timer
 
 - **FR-021**: Users MUST be able to start a live countdown session from any calculated schedule.
-- **FR-022**: The system MUST alert the user when the current time reaches each step's scheduled
-  start time.
-- **FR-023**: Users MUST be able to mark individual steps as complete during a live session.
+- **FR-022**: Each step in a live timer session MUST have an individually togglable alarm (on/off).
+  When a step's alarm is on and its scheduled start time arrives, the system MUST sound the alarm
+  and display a prompt identifying the step and dish.
+- **FR-023**: When a step alarm fires, the system MUST present the cook with a "Start" confirmation.
+  Confirming MUST dismiss the alarm and mark the step as started. Completion of steps is not
+  tracked; only start confirmation is required.
 - **FR-024**: The live timer MUST continue to run accurately if the user navigates away from and
   returns to the timer screen within the same session.
+- **FR-026**: During a live session, users MUST be able to delay a specific step by +1, +5, or
+  +10 minutes, shifting its scheduled start time forward by the chosen amount.
+- **FR-027**: During a live session, users MUST be able to delay all remaining unstarted steps for
+  a specific dish by +1, +5, or +10 minutes.
+- **FR-028**: During a live session, users MUST be able to delay all remaining unstarted steps
+  across all dishes in the meal by +1, +5, or +10 minutes.
+- **FR-029**: Delay actions MUST NOT affect steps already confirmed as started.
 
 #### Data Persistence
 
