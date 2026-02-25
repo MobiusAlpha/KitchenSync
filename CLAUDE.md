@@ -79,10 +79,27 @@ specs/
 
 ---
 
+## Constitution (ratified 2026-02-25 — v1.0.0)
+
+The constitution is at `.specify/memory/constitution.md`. Its five non-negotiable principles are:
+
+| # | Principle | Summary |
+|---|-----------|---------|
+| I | Library-First | Every domain concern is a standalone, independently testable library first |
+| II | Test-First / TDD | Tests written and confirmed failing **before** implementation — no exceptions |
+| III | Input Validation | Server-side validation at every trust boundary; never trust the client |
+| IV | Documentation Standards | Doc comments on all public classes/structs/functions; minimal inline comments |
+| V | Cloud-Native Platform | PWA frontend; containerized backend; stateless services; IaC for infra |
+
+**TDD is mandatory** — test tasks in `tasks.md` MUST precede implementation tasks and MUST fail
+before implementation begins. The tasks template has been updated to reflect this.
+
+---
+
 ## Typical Session Flow
 
 **First-time setup (done by the human):**
-1. Run `/speckit.constitution` → agree on project principles
+1. Run `/speckit.constitution` → agree on project principles ✅ done (v1.0.0)
 2. Run `/speckit.specify <feature description>` → creates the spec and feature branch
 
 **Per-feature development (can be AI-driven):**
