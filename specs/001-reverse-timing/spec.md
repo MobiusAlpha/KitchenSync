@@ -16,6 +16,7 @@ individual dishes, and can be timed together."
 
 - Q: Persistence model — user accounts vs local storage? → A: Local device storage only; no accounts, no backend, no cloud sync in scope.
 - Q: Live timer — alarm and delay behaviour? → A: Each step has an individually togglable alarm that fires at the step's scheduled start time. The cook confirms the step has been *started* (not completed). Delay (+1/+5/+10 min) can be applied to a specific step, a specific dish (all remaining unstarted steps for that dish), or the whole meal (all remaining unstarted steps across all dishes).
+- Q: Step-level delay cascade? → A: Cascade — delaying a step shifts all subsequent unstarted steps in the same dish by the same amount. After any delay, the app displays the updated effective meal completion time.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -133,7 +134,9 @@ and that confirming start dismisses the alarm and marks the step as started.
 3. **Given** an active timer session, **When** the cook toggles a step's alarm off, **Then** no
    alarm fires for that step when its start time arrives; all other step alarms are unaffected.
 4. **Given** an active timer session, **When** the cook applies a +5 minute delay to a specific
-   step, **Then** that step's scheduled start time shifts forward by 5 minutes.
+   step, **Then** that step's scheduled start time shifts forward by 5 minutes, all subsequent
+   unstarted steps in the same dish also shift forward by 5 minutes, and the updated effective
+   meal completion time is displayed.
 5. **Given** an active timer session with multiple remaining steps for a dish, **When** the cook
    applies a +10 minute delay to that dish, **Then** all remaining unstarted steps for that dish
    shift forward by 10 minutes.
@@ -166,9 +169,9 @@ and that confirming start dismisses the alarm and marks the step as started.
   update it.
 - What if the cook applies a delay to a step that has already been confirmed as started? Delay
   actions MUST be ignored for already-started steps (FR-029).
-- What if applying a delay pushes the whole meal's completion time past the original target?
-  The app MUST display the new effective completion time and warn the cook that the target time
-  will be missed by the cumulative delay applied.
+- What if applying a delay pushes the meal's completion time past the original target? The app
+  MUST always display the updated effective completion time after any delay (FR-030), and MUST
+  warn the cook when the cumulative delays cause the original target time to be missed.
 
 ## Requirements *(mandatory)*
 
@@ -234,12 +237,16 @@ and that confirming start dismisses the alarm and marks the step as started.
 - **FR-024**: The live timer MUST continue to run accurately if the user navigates away from and
   returns to the timer screen within the same session.
 - **FR-026**: During a live session, users MUST be able to delay a specific step by +1, +5, or
-  +10 minutes, shifting its scheduled start time forward by the chosen amount.
+  +10 minutes. The delay MUST cascade — all subsequent unstarted steps in the same dish shift
+  forward by the same amount.
 - **FR-027**: During a live session, users MUST be able to delay all remaining unstarted steps for
   a specific dish by +1, +5, or +10 minutes.
 - **FR-028**: During a live session, users MUST be able to delay all remaining unstarted steps
   across all dishes in the meal by +1, +5, or +10 minutes.
 - **FR-029**: Delay actions MUST NOT affect steps already confirmed as started.
+- **FR-030**: After any delay is applied (step, dish, or meal scope), the system MUST immediately
+  display the updated effective meal completion time, reflecting the cumulative impact of all
+  delays applied so far in the session.
 
 #### Data Persistence
 
