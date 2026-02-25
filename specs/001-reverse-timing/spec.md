@@ -17,6 +17,7 @@ individual dishes, and can be timed together."
 - Q: Persistence model — user accounts vs local storage? → A: Local device storage only; no accounts, no backend, no cloud sync in scope.
 - Q: Live timer — alarm and delay behaviour? → A: Each step has an individually togglable alarm that fires at the step's scheduled start time. The cook confirms the step has been *started* (not completed). Delay (+1/+5/+10 min) can be applied to a specific step, a specific dish (all remaining unstarted steps for that dish), or the whole meal (all remaining unstarted steps across all dishes).
 - Q: Step-level delay cascade? → A: Cascade — delaying a step shifts all subsequent unstarted steps in the same dish by the same amount. After any delay, the app displays the updated effective meal completion time.
+- Q: Alarm default state? → A: A global app setting controls the default (ships as "all on"). The cook can override at the meal level, then at the dish level, then toggle individual steps. Each level inherits from its parent unless explicitly overridden.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -131,21 +132,25 @@ and that confirming start dismisses the alarm and marks the step as started.
    displays a prominent prompt identifying the step and dish.
 2. **Given** an alarm prompt is displayed, **When** the cook confirms they have started the step,
    **Then** the alarm dismisses and the step is marked as started in the schedule.
-3. **Given** an active timer session, **When** the cook toggles a step's alarm off, **Then** no
-   alarm fires for that step when its start time arrives; all other step alarms are unaffected.
-4. **Given** an active timer session, **When** the cook applies a +5 minute delay to a specific
+3. **Given** an active timer session with the global default set to "all on", **When** the cook
+   disables alarms at the dish level for one dish, **Then** no alarms fire for any step in that
+   dish; steps in other dishes continue to fire alarms as usual.
+4. **Given** a dish with alarms disabled at the dish level, **When** the cook enables the alarm for
+   one specific step within that dish, **Then** only that step fires an alarm; all other steps in
+   the dish remain silent.
+5. **Given** an active timer session, **When** the cook applies a +5 minute delay to a specific
    step, **Then** that step's scheduled start time shifts forward by 5 minutes, all subsequent
    unstarted steps in the same dish also shift forward by 5 minutes, and the updated effective
    meal completion time is displayed.
-5. **Given** an active timer session with multiple remaining steps for a dish, **When** the cook
+6. **Given** an active timer session with multiple remaining steps for a dish, **When** the cook
    applies a +10 minute delay to that dish, **Then** all remaining unstarted steps for that dish
    shift forward by 10 minutes.
-6. **Given** an active timer session with a multi-dish meal, **When** the cook applies a +5 minute
+7. **Given** an active timer session with a multi-dish meal, **When** the cook applies a +5 minute
    delay to the whole meal, **Then** all remaining unstarted steps across all dishes shift forward
    by 5 minutes.
-7. **Given** an active timer session, **When** the cook navigates away from the timer screen and
+8. **Given** an active timer session, **When** the cook navigates away from the timer screen and
    returns, **Then** the timer has continued running accurately and reflects the current state.
-8. **Given** an active timer session where the current time has passed a step's start time without
+9. **Given** an active timer session where the current time has passed a step's start time without
    the cook confirming it as started, **When** the cook views the schedule, **Then** that step is
    flagged as overdue.
 
@@ -229,8 +234,10 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 - **FR-021**: Users MUST be able to start a live countdown session from any calculated schedule.
 - **FR-022**: Each step in a live timer session MUST have an individually togglable alarm (on/off).
-  When a step's alarm is on and its scheduled start time arrives, the system MUST sound the alarm
-  and display a prompt identifying the step and dish.
+  Step alarms inherit their default state from the dish-level setting, which inherits from the
+  meal-level setting, which inherits from the global app setting (FR-031). When a step's alarm is
+  on and its scheduled start time arrives, the system MUST sound the alarm and display a prompt
+  identifying the step and dish.
 - **FR-023**: When a step alarm fires, the system MUST present the cook with a "Start" confirmation.
   Confirming MUST dismiss the alarm and mark the step as started. Completion of steps is not
   tracked; only start confirmation is required.
@@ -247,6 +254,13 @@ and that confirming start dismisses the alarm and marks the step as started.
 - **FR-030**: After any delay is applied (step, dish, or meal scope), the system MUST immediately
   display the updated effective meal completion time, reflecting the cumulative impact of all
   delays applied so far in the session.
+- **FR-031**: The app MUST expose a global setting that controls the default alarm state (on/off)
+  for all steps. This setting MUST ship with a default of "all on."
+- **FR-032**: During a live timer session, users MUST be able to set the alarm state at the meal
+  level (applying to all dishes and their steps that have no dish- or step-level override) and at
+  the dish level (applying to all steps in that dish that have no step-level override). Individual
+  step overrides take highest precedence; dish-level overrides take precedence over meal-level;
+  meal-level overrides take precedence over the global setting.
 
 #### Data Persistence
 
