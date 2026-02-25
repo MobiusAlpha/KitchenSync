@@ -1,14 +1,14 @@
 <!--
 SYNC IMPACT REPORT
-Version: 1.0.0 → 1.1.0 (MINOR — material expansion of Principle II; substantive new governance rule)
-Modified principles:
-  - II. Test-First / TDD: added test immutability rule and contract-based testing requirement
-Modified sections:
-  - Governance: "Complexity additions" replaced with explicit dependency-approval gate
+Version: 1.1.0 → 1.2.0 (MINOR — new "Guiding Design Principles" section added)
+Added sections:
+  - Guiding Design Principles (Reliability, Maintainability, Scalability, Extensibility)
+Modified sections: none
+Removed sections: none
 Templates:
   ✅ .specify/memory/constitution.md — this file
-  ✅ CLAUDE.md — Principle II summary updated; "Per-feature development" heading de-parenthesised
-  — .specify/templates/tasks-template.md — no further changes needed
+  ✅ CLAUDE.md — design principles note added below core principles table
+  — .specify/templates/tasks-template.md — no changes needed
   — .specify/templates/spec-template.md — no changes needed
   — .specify/templates/plan-template.md — no changes needed
 Deferred:
@@ -106,6 +106,64 @@ The KitchenSync platform MUST conform to cloud-native principles across all laye
   external store (database, distributed cache, or object storage). Services MUST scale
   horizontally without coordination.
 
+## Guiding Design Principles
+
+These four qualities MUST inform every architectural and implementation decision. When a design
+choice conflicts with one or more of these principles, the conflict MUST be explicitly
+acknowledged and the trade-off recorded in the relevant spec or plan document.
+
+### Reliability
+
+The system MUST behave correctly and predictably under both normal and adverse conditions:
+
+- Core domain logic (timing calculations, scheduling) MUST be deterministic — identical inputs
+  MUST always produce identical outputs
+- All services MUST handle failures gracefully; silent failures are not permitted — every error
+  MUST be surfaced to the caller and logged with sufficient context for diagnosis
+- External dependencies (databases, third-party APIs) MUST be treated as unreliable; the system
+  MUST degrade gracefully when they are unavailable
+- Critical paths MUST have automated tests that verify correct behavior under failure conditions
+
+### Maintainability
+
+The codebase MUST remain comprehensible and safely changeable over time:
+
+- Clarity MUST take precedence over cleverness; code that is difficult to read or reason about
+  MUST be refactored before it is merged
+- Complexity MUST be justified — every abstraction, indirection, and generalization adds
+  maintenance cost and requires a proportional benefit
+- Test coverage is the primary enabler of safe change; a feature without tests is a feature
+  that cannot be safely maintained (see Principle II)
+- New dependencies MUST be evaluated for long-term maintenance burden, not only immediate
+  utility (see Governance — New dependencies)
+
+### Scalability
+
+The system MUST be designed to grow in load and data volume without requiring architectural
+rewrites:
+
+- Stateless services (see Principle V) MUST be the default, enabling horizontal scaling
+  without inter-instance coordination
+- Data models MUST be designed with growth in mind; fields, identifiers, and schemas MUST
+  accommodate future volume without requiring migrations that break existing data
+- Performance-sensitive paths MUST be identified in the plan document and designed accordingly;
+  premature optimization is prohibited, but deliberate ignorance of known hot paths is not
+- Scaling assumptions MUST be documented as part of the design (e.g., expected number of
+  concurrent users, meal steps per session, notification frequency)
+
+### Extensibility
+
+The system MUST accommodate new capabilities without requiring modification of existing,
+working code:
+
+- Library interfaces and API contracts MUST be designed to be extended without breaking
+  existing consumers (additive changes preferred; breaking changes require a major version)
+- New dish types, timing strategies, step categories, and notification channels MUST be
+  addable by implementing a defined contract, not by modifying existing logic
+- Extension points MUST be designed at library boundaries (see Principle I); internal
+  implementation details MUST NOT need to change to support new variants
+- Abstractions MUST be introduced at real extension points, not speculatively
+
 ## Platform & Architecture Constraints
 
 - **Permitted runtimes**: Browser (PWA), containerized backend services — no others without
@@ -146,4 +204,4 @@ The KitchenSync platform MUST conform to cloud-native principles across all laye
 - **AI agent guidance**: Runtime development guidance for AI agents is maintained in `CLAUDE.md`
   at the repository root and MUST be kept in sync with this constitution.
 
-**Version**: 1.1.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-02-25
+**Version**: 1.2.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-02-25

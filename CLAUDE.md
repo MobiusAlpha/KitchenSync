@@ -79,7 +79,7 @@ specs/
 
 ---
 
-## Constitution (ratified 2026-02-25 — v1.1.0)
+## Constitution (ratified 2026-02-25 — v1.2.0)
 
 The constitution is at `.specify/memory/constitution.md`. Its five non-negotiable principles are:
 
@@ -94,6 +94,11 @@ The constitution is at `.specify/memory/constitution.md`. Its five non-negotiabl
 **TDD is mandatory** — test tasks in `tasks.md` MUST precede implementation tasks and MUST fail
 before implementation begins. Tests are immutable once passing and MUST target contracts/
 abstractions, not concrete types. The tasks template has been updated to reflect this.
+
+The constitution also defines four **Guiding Design Principles** that MUST inform every
+architectural and implementation decision: **Reliability**, **Maintainability**, **Scalability**,
+and **Extensibility**. Trade-offs against these qualities MUST be explicitly acknowledged and
+recorded in the relevant spec or plan document.
 
 ---
 
