@@ -208,11 +208,9 @@ and verifying that the app alerts the user when the clock reaches each step's ca
 
 #### Data Persistence
 
-- **FR-025**: Saved recipes MUST be associated with
-  [NEEDS CLARIFICATION: a user account (requiring login/registration) or local device storage (no
-  account needed, but data is device-specific and not synced across devices)]. This choice
-  significantly affects scope: account-based persistence requires authentication, profile management,
-  and server-side storage; local persistence requires none of these but limits the cook to one device.
+- **FR-025**: Saved recipes MUST be stored on the user's local device only. No account, login, or
+  server-side storage is required. Data is device-specific and is not synced across devices. Cloud
+  sync is explicitly out of scope for this version.
 
 ### Key Entities
 
