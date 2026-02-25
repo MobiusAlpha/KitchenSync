@@ -79,20 +79,21 @@ specs/
 
 ---
 
-## Constitution (ratified 2026-02-25 — v1.0.0)
+## Constitution (ratified 2026-02-25 — v1.1.0)
 
 The constitution is at `.specify/memory/constitution.md`. Its five non-negotiable principles are:
 
 | # | Principle | Summary |
 |---|-----------|---------|
 | I | Library-First | Every domain concern is a standalone, independently testable library first |
-| II | Test-First / TDD | Tests written and confirmed failing **before** implementation — no exceptions |
+| II | Test-First / TDD | Tests written and confirmed failing **before** implementation; tests are immutable once passing; tests MUST target contracts/abstractions, not concrete types |
 | III | Input Validation | Server-side validation at every trust boundary; never trust the client |
 | IV | Documentation Standards | Doc comments on all public classes/structs/functions; minimal inline comments |
 | V | Cloud-Native Platform | PWA frontend; containerized backend; stateless services; IaC for infra |
 
 **TDD is mandatory** — test tasks in `tasks.md` MUST precede implementation tasks and MUST fail
-before implementation begins. The tasks template has been updated to reflect this.
+before implementation begins. Tests are immutable once passing and MUST target contracts/
+abstractions, not concrete types. The tasks template has been updated to reflect this.
 
 ---
 
@@ -102,7 +103,7 @@ before implementation begins. The tasks template has been updated to reflect thi
 1. Run `/speckit.constitution` → agree on project principles ✅ done (v1.0.0)
 2. Run `/speckit.specify <feature description>` → creates the spec and feature branch
 
-**Per-feature development (can be AI-driven):**
+**Per-feature development:**
 3. Run `/speckit.clarify` → resolve ambiguities before planning
 4. Run `/speckit.plan` → produces research, data model, contracts
 5. Run `/speckit.tasks` → produces the ordered task list

@@ -1,19 +1,18 @@
 <!--
 SYNC IMPACT REPORT
-Version: N/A (template) → 1.0.0 (initial ratification)
-Added principles: I. Library-First, II. Test-First/TDD, III. Input Validation,
-                  IV. Documentation Standards, V. Cloud-Native Platform
-Added sections: Platform & Architecture Constraints, Development Workflow, Governance
-Removed sections: All template placeholder tokens replaced
+Version: 1.0.0 → 1.1.0 (MINOR — material expansion of Principle II; substantive new governance rule)
+Modified principles:
+  - II. Test-First / TDD: added test immutability rule and contract-based testing requirement
+Modified sections:
+  - Governance: "Complexity additions" replaced with explicit dependency-approval gate
 Templates:
-  ✅ .specify/memory/constitution.md — this file (initial fill)
-  ✅ .specify/templates/tasks-template.md — "Tests OPTIONAL" note changed to MANDATORY
-  ✅ CLAUDE.md — constitution status and summary added
-  ⚠ .specify/templates/spec-template.md — no changes needed (spec is intentionally tech-agnostic)
-  ⚠ .specify/templates/plan-template.md — Constitution Check section is generic;
-      filled per-feature at plan time; no structural change needed
+  ✅ .specify/memory/constitution.md — this file
+  ✅ CLAUDE.md — Principle II summary updated; "Per-feature development" heading de-parenthesised
+  — .specify/templates/tasks-template.md — no further changes needed
+  — .specify/templates/spec-template.md — no changes needed
+  — .specify/templates/plan-template.md — no changes needed
 Deferred:
-  - None. RATIFICATION_DATE set to session date 2026-02-25; confirm with project owner if needed.
+  - None.
 -->
 
 # KitchenSync Constitution
@@ -47,6 +46,16 @@ strictly enforced:
 Test tasks in `tasks.md` MUST appear before their corresponding implementation tasks. No feature
 phase may be marked complete unless its tests exist and are passing. Skipping this cycle requires
 explicit written justification and project owner approval recorded in the spec.
+
+**Test immutability**: Once a test is written and passing, it MUST NOT be modified without
+explicit project owner approval. A test change is treated as a governance event — it must be
+justified, approved, and recorded. The only exception is renaming/refactoring that does not
+alter the behavior being verified.
+
+**Contract-based testing**: Tests MUST be written against contracts and abstractions, not
+against concrete implementations. The relevant contracts/abstractions MUST be designed and
+agreed upon alongside the tests, before implementation begins. Testing through a concrete type
+directly (rather than its interface/contract) is a violation of this principle.
 
 ### III. Input Validation — Never Trust the Client
 
@@ -127,9 +136,14 @@ The KitchenSync platform MUST conform to cloud-native principles across all laye
   (d) explicit project owner approval. Amendments MUST increment the version per semver rules.
 - **Compliance review**: All PRs MUST include a constitution compliance check. Any violation
   must be resolved or explicitly waived — with written justification — before merge.
-- **Complexity additions**: New dependencies, service boundaries, or libraries MUST be
-  justified against YAGNI. Simpler rejected alternatives MUST be documented.
+- **New dependencies**: Any new external dependency requires explicit project owner approval
+  before being introduced. The request MUST include: (a) what the dependency provides,
+  (b) a specific explanation of why no existing dependency or standard library feature can
+  achieve the same outcome, and (c) a maintainability justification if that is the primary
+  driver (maintainability is a valid reason, but MUST be argued explicitly — e.g., reduced
+  boilerplate, clearer intent, established ecosystem — not assumed). New service boundaries
+  and new internal libraries are subject to the same approval gate.
 - **AI agent guidance**: Runtime development guidance for AI agents is maintained in `CLAUDE.md`
   at the repository root and MUST be kept in sync with this constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-02-25
+**Version**: 1.1.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-02-25
