@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — **FR-025** contains one open clarification
-      (user accounts vs. local device storage) awaiting resolution
+- [x] No [NEEDS CLARIFICATION] markers remain — FR-025 resolved: local device storage only,
+      no accounts or backend required
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -32,8 +32,6 @@
 
 ## Notes
 
-- **One open clarification (FR-025)**: The persistence model (user accounts vs. local device
-  storage) is flagged for resolution. All other requirements are complete. This item requires
-  resolution before `/speckit.plan` can finalize the data and authentication architecture.
-- All other checklist items pass. The spec is ready to proceed to clarification of FR-025, after
-  which `/speckit.plan` can begin.
+- All checklist items pass. FR-025 resolved (2026-02-25): local device storage only — no user
+  accounts, no login, no backend. Cloud sync is out of scope for this version.
+- Spec is ready to proceed to `/speckit.clarify` or `/speckit.plan`.
