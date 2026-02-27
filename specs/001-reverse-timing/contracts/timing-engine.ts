@@ -4,9 +4,25 @@
  *
  * Pure time-arithmetic functions. No I/O, no side effects, no external dependencies.
  * All operations are deterministic: identical inputs always produce identical outputs (SC-003).
+ *
+ * NOTE: WallClockTime is defined here (canonical home) because it is a pure time type
+ * with no domain dependencies. @kitchensync/meal-model imports and re-exports it from
+ * this package, making timing-engine the single source of truth for time representation.
  */
 
-import type { WallClockTime } from './meal-model';
+// ─── Primitive types ─────────────────────────────────────────────────────────
+
+/**
+ * A wall-clock time on the current or next calendar day (HH:MM, 24-hour).
+ * Represents a point in time without a date component.
+ * Multi-day planning is out of scope — this type covers [00:00, 23:59] only.
+ */
+export interface WallClockTime {
+  /** Hour component: 0–23 */
+  readonly hour: number;
+  /** Minute component: 0–59 */
+  readonly minute: number;
+}
 
 // ─── Core arithmetic ─────────────────────────────────────────────────────────
 

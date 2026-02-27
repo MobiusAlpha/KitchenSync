@@ -19,7 +19,8 @@ Bootstrap 5.
 
 **Language/Version**: TypeScript 5.x (strict mode)
 **Primary Dependencies**: React 19, Vite 6, vite-plugin-pwa (Workbox), Bootstrap 5,
-react-bootstrap, Dexie.js (IndexedDB wrapper), Vitest, React Testing Library
+react-bootstrap, Dexie.js (IndexedDB wrapper), Vitest, React Testing Library,
+fake-indexeddb (devDep — enables Dexie.js repository tests inside Vitest/Node environment)
 **Storage**: IndexedDB via Dexie.js (recipes, meal plans, settings); sessionStorage for live timer
 state snapshot
 **Testing**: Vitest (unit + integration), React Testing Library (component/contract tests),

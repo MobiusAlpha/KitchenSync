@@ -5,17 +5,15 @@
  * Defines the core domain types and validation contracts for KitchenSync's
  * meal-model library. All entities in this contract are plain data objects
  * (no class instances). Validators return discriminated unions — never throw.
+ *
+ * NOTE: WallClockTime is defined in @kitchensync/timing-engine (canonical home)
+ * and re-exported here for consumer convenience. meal-model depends on timing-engine.
  */
 
-// ─── Primitive types ────────────────────────────────────────────────────────
+// Re-export WallClockTime from timing-engine — this package does not own the type.
+export type { WallClockTime } from './timing-engine';
 
-/** A wall-clock time on the current or next calendar day (HH:MM). */
-export interface WallClockTime {
-  /** 0–23 */
-  readonly hour: number;
-  /** 0–59 */
-  readonly minute: number;
-}
+// ─── Primitive types ────────────────────────────────────────────────────────
 
 /** All valid step categories. */
 export type StepType = 'prep' | 'cook' | 'rest' | 'cooldown';

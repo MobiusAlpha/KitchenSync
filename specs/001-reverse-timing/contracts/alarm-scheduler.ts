@@ -250,6 +250,19 @@ export interface DeserializeLiveSession {
                  | { readonly ok: false; readonly errors: readonly string[] };
 }
 
+/**
+ * Deserializes and validates an AlarmConfiguration read from storage.
+ * Guards against corrupted or schema-migrated data (Principle III).
+ * Called on every IndexedDB read of the global alarm config record.
+ *
+ * @param raw - Unknown data from storage.
+ * @returns Validated AlarmConfiguration or a list of validation errors.
+ */
+export interface DeserializeAlarmConfig {
+  (raw: unknown): { readonly ok: true; readonly value: AlarmConfiguration }
+                 | { readonly ok: false; readonly errors: readonly string[] };
+}
+
 // ─── AlarmScheduler facade ────────────────────────────────────────────────────
 
 /**
@@ -266,4 +279,5 @@ export interface AlarmScheduler {
   resolveAlarmEnabled: ResolveAlarmEnabled;
   computeEffectiveMealEnd: ComputeEffectiveMealEnd;
   deserializeLiveSession: DeserializeLiveSession;
+  deserializeAlarmConfig: DeserializeAlarmConfig;
 }

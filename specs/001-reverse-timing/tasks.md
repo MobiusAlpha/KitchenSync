@@ -28,11 +28,11 @@ shared tooling. No business logic. Must complete before any Phase 2 work.
 - [ ] T001 Initialise pnpm workspace root with package.json (private, engines: node ≥20), pnpm-workspace.yaml (packages: ["packages/*","apps/*"]), and .npmrc (shamefully-hoist=false)
 - [ ] T002 Configure Turborepo pipeline in turbo.json (tasks: build → test → lint, with correct dependency declarations between packages)
 - [ ] T003 [P] Scaffold packages/timing-engine: package.json (@kitchensync/timing-engine, type:module), tsconfig.json (strict, moduleResolution:bundler), vitest.config.ts, src/index.ts (empty export)
-- [ ] T004 [P] Scaffold packages/meal-model: package.json (@kitchensync/meal-model, type:module), tsconfig.json, vitest.config.ts, src/index.ts (empty export)
+- [ ] T004 [P] Scaffold packages/meal-model: package.json (@kitchensync/meal-model, type:module, peerDeps: @kitchensync/timing-engine), tsconfig.json (paths: @kitchensync/timing-engine → ../../timing-engine/src/index.ts for local dev), vitest.config.ts, src/index.ts (empty export)
 - [ ] T005 [P] Scaffold packages/scheduler: package.json (@kitchensync/scheduler, type:module, peerDeps: timing-engine + meal-model), tsconfig.json, vitest.config.ts, src/index.ts (empty export)
 - [ ] T006 [P] Scaffold packages/alarm-scheduler: package.json (@kitchensync/alarm-scheduler, type:module, peerDeps: timing-engine + meal-model + scheduler), tsconfig.json, vitest.config.ts, src/index.ts (empty export)
 - [ ] T007 Scaffold apps/pwa using Vite + React 19 + TypeScript template: vite.config.ts (defineConfig with @vitejs/plugin-react), tsconfig.json + tsconfig.app.json (strict, moduleResolution:bundler, types:["vite/client","vite-plugin-pwa/client"]) + tsconfig.node.json, apps/pwa/package.json
-- [ ] T008 Add workspace package dependencies to apps/pwa/package.json: @kitchensync/* (workspace:*), react@19, react-dom@19, bootstrap@5, react-bootstrap, dexie, react-router (v7), zustand; devDeps: vitest, @vitest/coverage-v8, @testing-library/react, @testing-library/user-event, jsdom, vite-plugin-pwa, @vite-pwa/assets-generator, @types/react, @types/react-dom
+- [ ] T008 Add workspace package dependencies to apps/pwa/package.json: @kitchensync/* (workspace:*), react@19, react-dom@19, bootstrap@5, react-bootstrap, dexie, react-router (v7), zustand; devDeps: vitest, @vitest/coverage-v8, @testing-library/react, @testing-library/user-event, jsdom, fake-indexeddb (required to run Dexie.js inside Vitest/Node for repository tests — T031, T044, T061), vite-plugin-pwa, @vite-pwa/assets-generator, @types/react, @types/react-dom
 - [ ] T009 [P] Configure root ESLint (eslint.config.js) with typescript-eslint strict rules, react-hooks plugin, and no-restricted-imports rule banning cross-package internal imports
 - [ ] T010 Configure vite-plugin-pwa in apps/pwa/vite.config.ts: strategy generateSW, registerType autoUpdate, navigateFallback /index.html, glob asset patterns, manifest with name/short_name/display:standalone/theme_color/icons
 - [ ] T011 [P] Generate PWA icon set (192×192 any, 512×512 any, 512×512 maskable) using @vite-pwa/assets-generator from a source SVG in apps/pwa/public/icons/
@@ -57,12 +57,12 @@ All user stories depend on these. No user story work begins until this phase is 
 
 ### Implementation
 
-- [ ] T014 Implement WallClockTime interface and StepType union in packages/meal-model/src/types.ts; export from packages/meal-model/src/index.ts
+- [ ] T014 Implement WallClockTime interface in packages/timing-engine/src/types.ts and export from packages/timing-engine/src/index.ts; implement StepType union in packages/meal-model/src/types.ts; re-export WallClockTime from packages/meal-model/src/index.ts (import from @kitchensync/timing-engine) so consumers can import either package
 - [ ] T015 Implement Step, Recipe, Dish, MealPlan entity interfaces in packages/meal-model/src/entities.ts; export from src/index.ts
 - [ ] T016 Implement ValidationError and ValidationResult types plus validateStep, validateRecipe, validateMealPlan, validateWallClockTime validators in packages/meal-model/src/validators.ts; export from src/index.ts
 - [ ] T017 Implement TimingEngine: subtractMinutes, addMinutes, differenceMinutes, formatWallClockTime, parseWallClockTime in packages/timing-engine/src/index.ts; export the TimingEngine facade object
 - [ ] T018 Configure Dexie.js database class with tables: recipes (id, name, description, steps, createdAt, updatedAt), mealPlans (id, name, targetTime, dishes, createdAt, updatedAt), liveSessions (id), alarmConfig (id) in apps/pwa/src/storage/db.ts
-- [ ] T019 Implement SettingsRepository (singleton AlarmConfiguration read/write) with schema guard on read in apps/pwa/src/storage/SettingsRepository.ts
+- [ ] T019 Implement SettingsRepository (singleton AlarmConfiguration read/write) in apps/pwa/src/storage/SettingsRepository.ts: on read, pass raw IndexedDB data through alarmScheduler.deserializeAlarmConfig(); return the default config {id:'global', defaultEnabled:true} if the result is ok:false or no record exists; do NOT implement a schema guard inline (Principle I — the guard belongs in the alarm-scheduler library)
 - [ ] T020 Set up React Router v7 hash-based routing with page stubs and route constants in apps/pwa/src/main.tsx and apps/pwa/src/App.tsx
 - [ ] T021 Implement Bootstrap 5 app shell layout (fixed top navbar, main content region, bottom nav for mobile) in apps/pwa/src/components/AppShell.tsx
 
@@ -182,6 +182,7 @@ completion time updates. Navigate away and back — verify the timer has continu
 - [ ] T049 [P] [US4] Write failing contract tests for delay cascade: applyStepDelay shifts target step and all subsequent unstarted steps in same dish by d minutes, does not affect started steps, does not affect other dishes; applyDishDelay shifts all unstarted steps in the dish; applyMealDelay shifts all unstarted steps across all dishes; all three return UPDATE_DISPLAY command with updated effectiveMealEnd in packages/alarm-scheduler/tests/delay-cascade.test.ts
 - [ ] T050 [P] [US4] Write failing contract tests for alarm resolution: resolveAlarmEnabled returns step-level override if present (highest precedence), dish-level if no step override, meal-level if no dish override, global default if no overrides; setAlarmOverride upserts correctly at each scope in packages/alarm-scheduler/tests/alarm-resolution.test.ts
 - [ ] T051 [P] [US4] Write failing contract tests for deserializeLiveSession: valid LiveSession round-trips ok:true; missing required field returns ok:false with descriptive error; corrupted scheduledStart field returns ok:false in packages/alarm-scheduler/tests/deserialization.test.ts
+- [ ] T077 [P] [US4] Write failing contract tests for deserializeAlarmConfig: valid AlarmConfiguration {id:'global', defaultEnabled:true/false} round-trips ok:true; missing id field returns ok:false; id !== 'global' returns ok:false; non-boolean defaultEnabled returns ok:false; null/undefined input returns ok:false in packages/alarm-scheduler/tests/deserialization.test.ts (same file as T051)
 - [ ] T052 [P] [US4] Write failing component tests for TimerView: renders step list with countdown, renders alarm prompt with step name and dish name when SOUND_ALARM command present, confirm-start button calls onConfirmStep, renders delay buttons (+1/+5/+10) at step/dish/meal scope, alarm toggle renders current state and calls onSetAlarmOverride in apps/pwa/tests/components/TimerView.test.tsx
 
 ### Implementation for User Story 4
@@ -193,15 +194,16 @@ completion time updates. Navigate away and back — verify the timer has continu
 - [ ] T057 [US4] Implement setAlarmOverride (upsert AlarmOverride in session.alarmOverrides) and resolveAlarmEnabled (walk override chain step→dish→meal→global) in packages/alarm-scheduler/src/alarm-resolution.ts
 - [ ] T058 [US4] Implement computeEffectiveMealEnd (max of scheduledStart + stepDuration across all non-started steps) in packages/alarm-scheduler/src/effective-meal-end.ts
 - [ ] T059 [US4] Implement deserializeLiveSession schema guard (validate all required fields and shapes; return ok:true/false result — no throw) in packages/alarm-scheduler/src/deserialize.ts
+- [ ] T078 [US4] Implement deserializeAlarmConfig schema guard (validate id === 'global', defaultEnabled is boolean; return ok:true/false — no throw) in packages/alarm-scheduler/src/deserialize.ts (same file as T059); export from packages/alarm-scheduler/src/index.ts and add to AlarmScheduler facade
 - [ ] T060 [US4] Assemble AlarmScheduler facade (re-export all functions under the AlarmScheduler interface) in packages/alarm-scheduler/src/index.ts
 - [ ] T061 [US4] Implement LiveSessionRepository (Dexie.js: save, load via deserializeLiveSession schema guard, clear) in apps/pwa/src/storage/LiveSessionRepository.ts
 - [ ] T062 [US4] Implement timer.worker.ts Web Worker (drift-corrected self-correcting tick using performance.now(); responds to start/stop messages; posts {type:'tick', nowMs} each second) in apps/pwa/src/workers/timer.worker.ts
-- [ ] T063 [US4] Implement useTimer hook (instantiates Worker on mount, subscribes to tick messages, calls AlarmScheduler.tickSession on each tick, persists session to LiveSessionRepository, exposes session state to UI) in apps/pwa/src/hooks/useTimer.ts
+- [ ] T063 [US4] Implement useTimer hook (instantiates Worker on mount, subscribes to tick messages, calls AlarmScheduler.tickSession on each tick, persists session to LiveSessionRepository, exposes session state to UI) in apps/pwa/src/hooks/useTimer.ts — hook accepts a `stepDurations: ReadonlyMap<string, number>` parameter (stepId → durationMinutes from original Dish steps, built by the caller before mount — see T068); stores it in a ref and passes it to every alarmScheduler.computeEffectiveMealEnd call; must NOT attempt to derive durations from LiveSession (LiveSession does not store them by design)
 - [ ] T064 [US4] Implement useAlarm hook (creates singleton AudioContext on first user gesture; plays three-note ascending chime on SOUND_ALARM command using OscillatorNode + exponential gain ramp; requests Notification permission once and calls registration.showNotification() on SOUND_ALARM) in apps/pwa/src/hooks/useAlarm.ts
 - [ ] T065 [US4] Implement TimerView component (step list with countdown to each step, alarm prompt overlay on SOUND_ALARM, confirm-start button, per-step alarm toggle, delay buttons visible per step; receives session + commands from useTimer/useAlarm) in apps/pwa/src/components/TimerView.tsx
 - [ ] T066 [US4] Implement DelayControls component (+1/+5/+10 min buttons, scope selector step/dish/meal; calls onApplyDelay callback with stepId/dishId/scope + delayMinutes) in apps/pwa/src/components/DelayControls.tsx
 - [ ] T067 [US4] Implement AlarmToggleControls component (renders on/off toggle for meal scope, per-dish scope, and per-step scope; calls onSetAlarmOverride with scope + targetId + enabled) in apps/pwa/src/components/AlarmToggleControls.tsx
-- [ ] T068 [US4] Implement TimerPage (starts session from Schedule via createLiveSession, mounts useTimer/useAlarm, renders TimerView + DelayControls + AlarmToggleControls; auto-resumes session from LiveSessionRepository on mount if one exists; clears session on explicit end) in apps/pwa/src/pages/TimerPage.tsx
+- [ ] T068 [US4] Implement TimerPage (starts session from Schedule via createLiveSession, mounts useTimer/useAlarm, renders TimerView + DelayControls + AlarmToggleControls; auto-resumes session from LiveSessionRepository on mount if one exists; clears session on explicit end) in apps/pwa/src/pages/TimerPage.tsx — before mounting useTimer, build `stepDurations: ReadonlyMap<string, number>` from the incoming Schedule source Dishes by mapping step.id → step.durationMinutes across all dishes; pass this map to useTimer (it cannot be derived from the Schedule's StepEvents, which do not carry duration)
 
 **Checkpoint**: US4 fully functional. `turbo test --filter=@kitchensync/alarm-scheduler` passes. Live timer session survives page reload, alarms fire within ±1 s, delay cascade works at all three scopes.
 
@@ -250,11 +252,13 @@ US4 needs any valid Schedule (from US1) as its session input.
 ### Package Build Order
 
 ```
-timing-engine ──┐
-meal-model   ──┼──► scheduler ──► alarm-scheduler
-               │
-               └──► (used directly by alarm-scheduler)
+timing-engine ──► meal-model ──┐
+      │                        ├──► scheduler ──► alarm-scheduler
+      └────────────────────────┘
 ```
+
+Note: meal-model now depends on timing-engine (imports WallClockTime). Both meal-model and
+timing-engine are listed as peerDeps of scheduler and alarm-scheduler.
 
 ### Within Each User Story
 
@@ -281,8 +285,11 @@ T006 scaffold alarm-scheduler  ─┘
 T012 write timing-engine tests  ─┐ parallel
 T013 write meal-model tests     ─┘
     │
-    ▼ (confirm tests fail, then implement)
-T014 types → T015 entities → T016 validators → T017 TimingEngine
+    ▼ (confirm tests fail, then implement in dependency order)
+T014 (WallClockTime in timing-engine + StepType in meal-model)
+  → T015 entities (meal-model; imports WallClockTime from timing-engine)
+  → T016 validators
+  → T017 TimingEngine implementation
 ```
 
 ### Phase 3 Tests (T022–T024 all parallelisable before any implementation)
@@ -292,13 +299,14 @@ T023 StepForm component tests   ─┤ parallel
 T024 ScheduleView component     ─┘
 ```
 
-### Phase 6 Tests (T048–T052 all parallelisable)
+### Phase 6 Tests (T048–T052 + T077 all parallelisable)
 ```
-T048 core session tests     ─┐
-T049 delay cascade tests    ─┤
-T050 alarm resolution tests ─┤ parallel
-T051 deserialization tests  ─┤
-T052 TimerView tests        ─┘
+T048 core session tests           ─┐
+T049 delay cascade tests          ─┤
+T050 alarm resolution tests       ─┤ parallel
+T051 deserializeLiveSession tests ─┤
+T077 deserializeAlarmConfig tests ─┤
+T052 TimerView tests              ─┘
 ```
 
 ---
