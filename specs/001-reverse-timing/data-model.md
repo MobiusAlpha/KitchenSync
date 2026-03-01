@@ -64,8 +64,8 @@ A named, reusable, ordered collection of Steps saved for future use.
 
 | Field         | Type           | Constraints |
 |---------------|----------------|-------------|
-| `id`          | `string` (UUID v4) | Required, immutable |
-| `name`        | `string`       | Required; 1–100 characters; unique per device |
+| `id`          | `string` (UUID v4) | Required, immutable; entity identity is the UUID — names need not be unique |
+| `name`        | `string`       | Required; 1–100 characters |
 | `description` | `string`       | Optional; max 500 characters |
 | `steps`       | `Step[]`       | Required; ordered; ≥ 1 step |
 | `createdAt`   | `number` (epoch ms) | Required; set on creation; immutable |
@@ -75,6 +75,7 @@ A named, reusable, ordered collection of Steps saved for future use.
 - `name` must not be blank
 - `steps` array must contain at least one Step
 - Step order is significant; the array index defines execution order
+- Recipe names are NOT required to be unique — UUID `id` is the sole identity key
 - Deleting a Recipe does not affect any active LiveSession derived from it
 
 ---
@@ -88,7 +89,7 @@ A collection of Dishes sharing a single target "ready by" time.
 | `id`          | `string` (UUID v4)    | Required, immutable |
 | `name`        | `string`              | Required; 1–100 characters |
 | `targetTime`  | `WallClockTime`       | Required; see type below |
-| `dishes`      | `Dish[]`              | Required; ≥ 1 Dish; max 20 |
+| `dishes`      | `Dish[]`              | Required; ≥ 1 Dish; max 20 (validated by `validateMealPlan`) |
 | `createdAt`   | `number` (epoch ms)   | Required; immutable |
 | `updatedAt`   | `number` (epoch ms)   | Required |
 
@@ -165,7 +166,7 @@ a Schedule. Persisted to IndexedDB so it survives page reloads (Q3 resolution: a
 | `mealPlanId`       | `string \| null`       | UUID of source MealPlan if multi-dish; `null` for single-dish |
 | `startedAt`        | `number` (epoch ms)    | Wall-clock time when the session was started |
 | `targetTime`       | `WallClockTime`        | Original target time (before any delays) |
-| `effectiveTargetTime` | `WallClockTime`     | Current target, adjusted by cumulative delays on all-meal delays |
+| `effectiveTargetTime` | `WallClockTime`     | Cook-confirmed effective target time. Updated only via `AcceptNewTargetTime` after the cook accepts a proposed delay. See two-phase delay flow below. |
 | `stepStates`       | `LiveStepState[]`      | One entry per Step across all Dishes |
 | `alarmOverrides`   | `AlarmOverride[]`      | Session-level alarm overrides at meal/dish/step scope |
 | `totalDelayMinutes`| `number`               | Cumulative delay applied to the session; ≥ 0 |
@@ -186,9 +187,30 @@ When a step-level delay of `d` minutes is applied to step `sᵢ`:
 - `sᵢ.scheduledStart += d` iff `sᵢ.status !== 'started'`
 - For all `sⱼ` in the same dish where `j > i` and `sⱼ.status !== 'started'`: `sⱼ.scheduledStart += d`
 
-**Effective meal completion time** (FR-030):
+**Two-phase delay flow** (FR-030):
+
+Updating the cook-confirmed target time is a two-step process, to give the cook a chance
+to review the computed impact before committing:
+
+```
+Phase 1 — Delay applied:
+  applyStepDelay / applyDishDelay / applyMealDelay
+    → shifts scheduledStart values for unstarted steps
+    → calls computeEffectiveMealEnd (dynamic — from step states + durations)
+    → emits UPDATE_DISPLAY { effectiveMealEnd }   ← proposed new target shown in UI
+    LiveSession.effectiveTargetTime is NOT updated yet.
+
+Phase 2 — Cook accepts:
+  Cook taps "Accept" in TimerView
+    → acceptNewTargetTime(session, effectiveMealEnd)
+    → LiveSession.effectiveTargetTime = effectiveMealEnd   ← committed
+```
+
 `effectiveMealEnd = max(scheduledStart(lastUnstartedStepPerDish) + lastStepDuration)`
-Displayed after every delay operation.
+
+The UI (T070) reads `effectiveMealEnd` from the `UPDATE_DISPLAY` command, not from
+`LiveSession.effectiveTargetTime`, while displaying the proposed time. It reads
+`effectiveTargetTime` only for the overrun-vs-original-target banner (T071).
 
 ---
 

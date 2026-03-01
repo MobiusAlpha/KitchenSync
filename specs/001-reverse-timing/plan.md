@@ -21,8 +21,7 @@ Bootstrap 5.
 **Primary Dependencies**: React 19, Vite 6, vite-plugin-pwa (Workbox), Bootstrap 5,
 react-bootstrap, Dexie.js (IndexedDB wrapper), Vitest, React Testing Library,
 fake-indexeddb (devDep — enables Dexie.js repository tests inside Vitest/Node environment)
-**Storage**: IndexedDB via Dexie.js (recipes, meal plans, settings); sessionStorage for live timer
-state snapshot
+**Storage**: IndexedDB via Dexie.js (recipes, meal plans, live timer sessions, settings)
 **Testing**: Vitest (unit + integration), React Testing Library (component/contract tests),
 Playwright (E2E — deferred to polish phase)
 **Target Platform**: Browser PWA (Chrome, Firefox, Safari — iOS Safari required for kitchen tablet use)

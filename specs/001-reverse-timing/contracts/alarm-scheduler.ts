@@ -12,7 +12,7 @@
  * Dependencies: @kitchensync/meal-model, @kitchensync/timing-engine, @kitchensync/scheduler.
  */
 
-import type { WallClockTime } from './meal-model';
+import type { WallClockTime } from './timing-engine';
 import type { Schedule, StepEvent } from './scheduler';
 
 // ─── Alarm configuration ──────────────────────────────────────────────────────
@@ -62,9 +62,21 @@ export interface LiveSession {
   readonly mealPlanId: string | null;
   /** Unix epoch ms when the session was created. */
   readonly startedAt: number;
-  /** The original target time before any delays. */
+  /** The original target time before any delays. Never changes after session creation. */
   readonly targetTime: WallClockTime;
-  /** The current effective meal completion time (shifts with whole-meal delays). */
+  /**
+   * The cook-confirmed effective target time. Starts equal to targetTime and is updated
+   * only when the cook explicitly accepts a proposed new target (via AcceptNewTargetTime).
+   *
+   * Delay flow (two-phase):
+   *   Phase 1 — After any delay is applied, computeEffectiveMealEnd derives an intermediate
+   *              effectiveMealEnd from current step states. This value is emitted in the
+   *              UPDATE_DISPLAY command as the *proposed* new target time and shown to the cook.
+   *   Phase 2 — The cook taps "Accept". AcceptNewTargetTime is called, updating this field.
+   *
+   * This field therefore lags behind effectiveMealEnd until the cook accepts.
+   * T070 renders effectiveMealEnd from the UPDATE_DISPLAY command, NOT this field directly.
+   */
   readonly effectiveTargetTime: WallClockTime;
   readonly stepStates: readonly LiveStepState[];
   readonly alarmOverrides: readonly AlarmOverride[];
@@ -239,6 +251,20 @@ export interface ComputeEffectiveMealEnd {
 }
 
 /**
+ * Commits the cook-accepted effective target time to the session (Phase 2 of the delay flow).
+ *
+ * Called after the cook taps "Accept" in response to an UPDATE_DISPLAY command.
+ * The proposedTime argument is the effectiveMealEnd value carried by that command.
+ *
+ * @param session - Current session state.
+ * @param proposedTime - The effectiveMealEnd value the cook is accepting as the new target.
+ * @returns Updated session with effectiveTargetTime set to proposedTime.
+ */
+export interface AcceptNewTargetTime {
+  (session: LiveSession, proposedTime: WallClockTime): LiveSession;
+}
+
+/**
  * Deserializes and validates a LiveSession read from storage.
  * Guards against corrupted or schema-migrated data (Principle III).
  *
@@ -275,6 +301,7 @@ export interface AlarmScheduler {
   applyStepDelay: ApplyStepDelay;
   applyDishDelay: ApplyDishDelay;
   applyMealDelay: ApplyMealDelay;
+  acceptNewTargetTime: AcceptNewTargetTime;
   setAlarmOverride: SetAlarmOverride;
   resolveAlarmEnabled: ResolveAlarmEnabled;
   computeEffectiveMealEnd: ComputeEffectiveMealEnd;

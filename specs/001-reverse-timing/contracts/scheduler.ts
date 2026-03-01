@@ -9,8 +9,8 @@
  * Dependencies: @kitchensync/meal-model, @kitchensync/timing-engine.
  */
 
-import type { Dish, MealPlan, WallClockTime } from './meal-model';
-import type { StepType } from './meal-model';
+import type { Dish, MealPlan, StepType } from './meal-model';
+import type { WallClockTime } from './timing-engine';
 
 // ─── Schedule output ──────────────────────────────────────────────────────────
 

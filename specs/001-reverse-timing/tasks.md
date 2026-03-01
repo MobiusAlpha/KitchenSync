@@ -1,7 +1,7 @@
 # Tasks: Reverse-Timing Cooking Scheduler
 
 **Input**: Design documents from `/specs/001-reverse-timing/`
-**Prerequisites**: plan.md ✅, spec.md ✅, research.md ✅, data-model.md ✅, contracts/ ✅
+**Prerequisites**: plan.md ✅, spec.md ✅, research.md ✅, data-model.md ✅, contracts/ ✅ (timing-engine, meal-model, scheduler, alarm-scheduler, storage, ui-contracts)
 
 **Tests**: TDD is **MANDATORY** per the KitchenSync constitution (Principle II). Test tasks
 MUST appear before their corresponding implementation tasks, MUST be written and confirmed
@@ -53,7 +53,7 @@ All user stories depend on these. No user story work begins until this phase is 
 > **NOTE: Write these tests FIRST, run them, confirm they FAIL, then implement.**
 
 - [ ] T012 [P] Write failing unit tests for TimingEngine contract: subtractMinutes (midnight wrap), addMinutes (next-day wrap), differenceMinutes (cross-midnight path), formatWallClockTime (zero-padding), parseWallClockTime (invalid input → null) in packages/timing-engine/tests/timing-engine.test.ts — test against the TimingEngine interface, not the implementation
-- [ ] T013 [P] Write failing unit tests for meal-model validators: validateStep (blank name, zero duration, invalid type), validateRecipe (no steps, blank name), validateMealPlan (no dishes, invalid WallClockTime), validateWallClockTime (out-of-range hour/minute) — all paths returning ValidationResult in packages/meal-model/tests/validators.test.ts
+- [ ] T013 [P] Write failing unit tests for meal-model validators: validateStep (blank name, zero duration, invalid type), validateRecipe (no steps, blank name), validateMealPlan (no dishes, >20 dishes → rejected, invalid WallClockTime), validateWallClockTime (out-of-range hour/minute) — all paths returning ValidationResult in packages/meal-model/tests/validators.test.ts
 
 ### Implementation
 
@@ -121,6 +121,7 @@ the next session. Delete recipe, verify it disappears from the list.
 - [ ] T034 [US2] Implement RecipeRepository (Dexie.js CRUD: create assigns UUID + timestamps, update refreshes updatedAt, delete, getAll, getById) in apps/pwa/src/storage/RecipeRepository.ts
 - [ ] T035 [US2] Implement RecipeEditor component (controlled form: recipe name + StepForm; validates via validateRecipe before save; edit mode pre-fills from recipe prop) in apps/pwa/src/components/RecipeEditor.tsx
 - [ ] T036 [US2] Implement RecipeLibrary component (list of saved recipes with load and delete actions; empty-state prompt; uses RecipeRepository) in apps/pwa/src/components/RecipeLibrary.tsx
+- [ ] T082 [P] [US2] Write failing component tests for RecipesPage: renders RecipeLibrary listing; create flow opens RecipeEditor and calls RecipeRepository.create on save; edit flow pre-fills RecipeEditor and calls update on save; delete flow calls RecipeRepository.delete and removes entry from list in apps/pwa/tests/pages/RecipesPage.test.tsx — test via RecipeRepository and RecipeEditor interfaces (contracts/storage.ts, contracts/ui-contracts.ts)
 - [ ] T037 [US2] Implement RecipesPage (recipe library + inline recipe editor; create/edit/delete flow) in apps/pwa/src/pages/RecipesPage.tsx
 - [ ] T038 [US2] Add "Load Recipe" flow to PlannerPage: recipe picker modal or route param that pre-fills StepForm with the selected recipe's steps (session copy — does not mutate saved recipe) in apps/pwa/src/pages/PlannerPage.tsx
 - [ ] T039 [US2] Add "Save as Recipe" action to PlannerPage: opens name input, calls RecipeRepository.create with current steps, navigates to RecipesPage on success in apps/pwa/src/pages/PlannerPage.tsx
@@ -150,9 +151,11 @@ immediately.
 ### Implementation for User Story 3
 
 - [ ] T043 [US3] Implement scheduleMealPlan function (schedule each dish independently against shared targetTime, merge events, sort ascending, detect and flag isParallel) in packages/scheduler/src/schedule-meal-plan.ts; add scheduleMealPlan to Scheduler facade in packages/scheduler/src/index.ts
+- [ ] T079 [P] [US3] Write failing unit tests for MealPlanRepository: create (persists to IndexedDB, sets createdAt/updatedAt), update (refreshes updatedAt, preserves createdAt), delete (removes entry), getAll (returns all meal plans), getById (returns correct plan, null for missing id), duplicate Dish displayName gets auto-suffixed (" #2") on create and on update in apps/pwa/tests/storage/MealPlanRepository.test.ts — test via the MealPlanRepository interface (contracts/storage.ts), mock Dexie using fake-indexeddb
 - [ ] T044 [US3] Implement MealPlanRepository (Dexie.js CRUD with duplicate displayName disambiguation on create/update) in apps/pwa/src/storage/MealPlanRepository.ts
 - [ ] T045 [US3] Implement MealPlanEditor component (add dish via RecipeLibrary picker or ad-hoc inline StepForm, rename/remove dishes, target time field) in apps/pwa/src/components/MealPlanEditor.tsx
 - [ ] T046 [US3] Extend ScheduleView to handle multi-dish Schedule: render parallel step indicator (e.g., "⇔ parallel" badge) when isParallel=true; display dish name column in apps/pwa/src/components/ScheduleView.tsx
+- [ ] T083 [P] [US3] Write failing component tests for MealPlanPage: renders MealPlanEditor + ScheduleView; save action calls MealPlanRepository.create / update; load action populates editor from MealPlanRepository.getById; "Start Timer" button navigates to /timer with the Schedule in router state; schedule recalculates automatically when a dish is added or removed in apps/pwa/tests/pages/MealPlanPage.test.tsx — test via MealPlanRepository, MealPlanEditor, and ScheduleView interfaces (contracts/storage.ts, contracts/ui-contracts.ts)
 - [ ] T047 [US3] Implement MealPlanPage (MealPlanEditor + ScheduleView unified view, save/load meal plan from MealPlanRepository, "Start Timer" button navigates to TimerPage) in apps/pwa/src/pages/MealPlanPage.tsx
 
 **Checkpoint**: US3 independently functional on top of US1/US2. A cook can build a multi-dish meal plan and view a unified, correctly-ordered schedule.
@@ -193,9 +196,11 @@ completion time updates. Navigate away and back — verify the timer has continu
 - [ ] T056 [US4] Implement applyStepDelay, applyDishDelay, applyMealDelay with cascade logic (skip started steps, compute effectiveMealEnd, emit UPDATE_DISPLAY command) in packages/alarm-scheduler/src/delay.ts
 - [ ] T057 [US4] Implement setAlarmOverride (upsert AlarmOverride in session.alarmOverrides) and resolveAlarmEnabled (walk override chain step→dish→meal→global) in packages/alarm-scheduler/src/alarm-resolution.ts
 - [ ] T058 [US4] Implement computeEffectiveMealEnd (max of scheduledStart + stepDuration across all non-started steps) in packages/alarm-scheduler/src/effective-meal-end.ts
+- [ ] T085 [US4] Implement acceptNewTargetTime (sets session.effectiveTargetTime to the cook-accepted proposedTime; Phase 2 of the delay flow — see data-model.md two-phase delay flow) in packages/alarm-scheduler/src/accept-target-time.ts; export from src/index.ts
 - [ ] T059 [US4] Implement deserializeLiveSession schema guard (validate all required fields and shapes; return ok:true/false result — no throw) in packages/alarm-scheduler/src/deserialize.ts
-- [ ] T078 [US4] Implement deserializeAlarmConfig schema guard (validate id === 'global', defaultEnabled is boolean; return ok:true/false — no throw) in packages/alarm-scheduler/src/deserialize.ts (same file as T059); export from packages/alarm-scheduler/src/index.ts and add to AlarmScheduler facade
-- [ ] T060 [US4] Assemble AlarmScheduler facade (re-export all functions under the AlarmScheduler interface) in packages/alarm-scheduler/src/index.ts
+- [ ] T078 [US4] Implement deserializeAlarmConfig schema guard (validate id === 'global', defaultEnabled is boolean; return ok:true/false — no throw) in packages/alarm-scheduler/src/deserialize.ts (same file as T059); export from packages/alarm-scheduler/src/index.ts
+- [ ] T060 [US4] Assemble AlarmScheduler facade (re-export all functions — including acceptNewTargetTime — under the AlarmScheduler interface) in packages/alarm-scheduler/src/index.ts
+- [ ] T080 [P] [US4] Write failing unit tests for LiveSessionRepository: save persists session to IndexedDB; load returns session after save; load passes raw data through deserializeLiveSession (corrupted data → null, not error); clear removes stored session and subsequent load returns null in apps/pwa/tests/storage/LiveSessionRepository.test.ts — test via the LiveSessionRepository interface (contracts/storage.ts), mock Dexie using fake-indexeddb
 - [ ] T061 [US4] Implement LiveSessionRepository (Dexie.js: save, load via deserializeLiveSession schema guard, clear) in apps/pwa/src/storage/LiveSessionRepository.ts
 - [ ] T062 [US4] Implement timer.worker.ts Web Worker (drift-corrected self-correcting tick using performance.now(); responds to start/stop messages; posts {type:'tick', nowMs} each second) in apps/pwa/src/workers/timer.worker.ts
 - [ ] T063 [US4] Implement useTimer hook (instantiates Worker on mount, subscribes to tick messages, calls AlarmScheduler.tickSession on each tick, persists session to LiveSessionRepository, exposes session state to UI) in apps/pwa/src/hooks/useTimer.ts — hook accepts a `stepDurations: ReadonlyMap<string, number>` parameter (stepId → durationMinutes from original Dish steps, built by the caller before mount — see T068); stores it in a ref and passes it to every alarmScheduler.computeEffectiveMealEnd call; must NOT attempt to derive durations from LiveSession (LiveSession does not store them by design)
@@ -215,7 +220,7 @@ completion time updates. Navigate away and back — verify the timer has continu
 integration validation.
 
 - [ ] T069 [P] Implement AlarmSettingsPage (global alarm default toggle reads/writes via SettingsRepository; link from navbar settings icon) in apps/pwa/src/pages/AlarmSettingsPage.tsx
-- [ ] T070 [P] Add "effective meal completion time" display to TimerPage: reads effectiveTargetTime from LiveSession and re-renders on every UPDATE_DISPLAY command in apps/pwa/src/pages/TimerPage.tsx
+- [ ] T070 [P] Add "effective meal completion time" display to TimerPage (two-phase delay flow): on every UPDATE_DISPLAY command, read effectiveMealEnd from the command and show it as the proposed new target time with an "Accept" button; on accept, call alarmScheduler.acceptNewTargetTime and persist via LiveSessionRepository; do NOT read effectiveTargetTime from LiveSession for this display — read only from the UPDATE_DISPLAY command's effectiveMealEnd field in apps/pwa/src/pages/TimerPage.tsx
 - [ ] T071 [P] Add overrun warning to TimerPage: when cumulative delays push effectiveTargetTime past original targetTime, render a banner "⚠️ You will miss your original target by X min" in apps/pwa/src/pages/TimerPage.tsx
 - [ ] T072 [P] Add duplicate dish name auto-disambiguation helper (appends " #2", " #3"…) to MealPlanEditor at dish-add time in apps/pwa/src/components/MealPlanEditor.tsx
 - [ ] T073 [P] Validate schedule recalculation stays under 16 ms budget: add a Vitest bench test for scheduleMealPlan with 10 dishes × 20 steps in packages/scheduler/tests/scheduler.bench.ts
@@ -299,14 +304,32 @@ T023 StepForm component tests   ─┤ parallel
 T024 ScheduleView component     ─┘
 ```
 
-### Phase 6 Tests (T048–T052 + T077 all parallelisable)
+### Phase 4 Tests (T031–T033 + T082 all parallelisable)
+```
+T031 RecipeRepository tests  ─┐
+T032 RecipeEditor tests      ─┤ parallel
+T033 RecipeLibrary tests     ─┤
+T082 RecipesPage tests       ─┘
+```
+
+### Phase 5 Tests (T040–T042 + T079 + T083 all parallelisable)
+```
+T040 scheduleMealPlan tests  ─┐
+T041 MealPlanEditor tests    ─┤
+T042 ScheduleView multi-dish ─┤ parallel
+T079 MealPlanRepository tests─┤
+T083 MealPlanPage tests      ─┘
+```
+
+### Phase 6 Tests (T048–T052 + T077 + T080 all parallelisable)
 ```
 T048 core session tests           ─┐
 T049 delay cascade tests          ─┤
-T050 alarm resolution tests       ─┤ parallel
-T051 deserializeLiveSession tests ─┤
+T050 alarm resolution tests       ─┤
+T051 deserializeLiveSession tests ─┤ parallel
 T077 deserializeAlarmConfig tests ─┤
-T052 TimerView tests              ─┘
+T052 TimerView tests              ─┤
+T080 LiveSessionRepository tests  ─┘
 ```
 
 ---
