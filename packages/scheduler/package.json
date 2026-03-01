@@ -1,0 +1,28 @@
+{
+  "name": "@kitchensync/scheduler",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint src tests"
+  },
+  "peerDependencies": {
+    "@kitchensync/meal-model": "workspace:*",
+    "@kitchensync/timing-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@kitchensync/meal-model": "workspace:*",
+    "@kitchensync/timing-engine": "workspace:*",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
