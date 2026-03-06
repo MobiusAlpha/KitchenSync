@@ -22,6 +22,7 @@ individual dishes, and can be timed together."
 ### Session 2026-03-06
 
 - Q: Should the app support adding a component as a single total-duration block (no named stages)? → A: Yes — single-block entry is supported (name + total duration only). Internally this auto-creates a single unnamed/default step; no distinct UI mode is exposed. The same entry flow handles both single-block and staged components.
+- Q: Does "component" map to dish only, or can a single dish contain parallel sub-components? → A: Component = Dish only. Parallelism exists only between dishes; steps within a single dish are always strictly sequential.
 
 ## User Scenarios & Testing *(mandatory)*
 
