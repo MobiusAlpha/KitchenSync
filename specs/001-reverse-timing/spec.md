@@ -24,6 +24,7 @@ individual dishes, and can be timed together."
 - Q: Should the app support adding a component as a single total-duration block (no named stages)? → A: Yes — single-block entry is supported (name + total duration only). Internally this auto-creates a single unnamed/default step; no distinct UI mode is exposed. The same entry flow handles both single-block and staged components.
 - Q: Does "component" map to dish only, or can a single dish contain parallel sub-components? → A: Component = Dish only. Parallelism exists only between dishes; steps within a single dish are always strictly sequential.
 - Q: What should the primary schedule view be? → A: Both views available. Default is a Gantt-chart view with each dish as a continuous horizontal lane and its steps shown as blocks within that lane. A chronological list view is also available and user-switchable.
+- Q: Can a single-block component be expanded into named stages inline during a session (without returning to the recipe editor)? → A: Yes — a single-block component can be expanded into named stages directly within the scheduling session. The schedule recalculates immediately when stages are added.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -230,6 +231,9 @@ and that confirming start dismisses the alarm and marks the step as started.
   windows silently.
 - **FR-014**: Any change to a step duration or to the target time MUST trigger immediate
   recalculation of the schedule.
+- **FR-033**: During a scheduling session, users MUST be able to expand a single-block component
+  (auto-generated single step) into multiple named stages inline, without returning to the recipe
+  editor. The schedule MUST recalculate immediately when stages are added or modified.
 
 #### Meal Planning
 
