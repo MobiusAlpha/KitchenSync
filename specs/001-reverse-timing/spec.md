@@ -23,6 +23,7 @@ individual dishes, and can be timed together."
 
 - Q: Should the app support adding a component as a single total-duration block (no named stages)? → A: Yes — single-block entry is supported (name + total duration only). Internally this auto-creates a single unnamed/default step; no distinct UI mode is exposed. The same entry flow handles both single-block and staged components.
 - Q: Does "component" map to dish only, or can a single dish contain parallel sub-components? → A: Component = Dish only. Parallelism exists only between dishes; steps within a single dish are always strictly sequential.
+- Q: What should the primary schedule view be? → A: Both views available. Default is a Gantt-chart view with each dish as a continuous horizontal lane and its steps shown as blocks within that lane. A chronological list view is also available and user-switchable.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -217,8 +218,13 @@ and that confirming start dismisses the alarm and marks the step as started.
   or meal plan.
 - **FR-011**: The system MUST calculate each step's start time by subtracting cumulative step
   durations from the target time in reverse step order.
-- **FR-012**: The system MUST display the calculated schedule as an ordered list of step events,
-  each showing: dish name, step name, step type, and start time.
+- **FR-012**: The system MUST display the calculated schedule in two views, both always available
+  and user-switchable:
+  (a) **Gantt view** (default): each dish occupies a continuous horizontal lane; steps are rendered
+  as labelled blocks within that lane, positioned and sized proportionally to their start time and
+  duration. This is the default view shown on schedule generation.
+  (b) **Chronological list view**: an ordered list of step events, each showing dish name, step
+  name, step type, and start time.
 - **FR-013**: If the earliest calculated start time is in the past, the system MUST display a
   prominent warning showing the overrun amount and preventing the cook from missing preparation
   windows silently.
@@ -231,8 +237,8 @@ and that confirming start dismisses the alarm and marks the step as started.
 - **FR-016**: Each dish in a meal plan MUST be sourced from either a saved recipe or an ad-hoc set
   of steps entered inline.
 - **FR-017**: A meal plan MUST apply a single shared target "ready by" time to all dishes.
-- **FR-018**: The system MUST generate a unified, chronologically-ordered schedule across all dishes
-  in a meal plan.
+- **FR-018**: The system MUST generate a unified schedule across all dishes in a meal plan,
+  displayed in both Gantt view (default) and chronological list view per FR-012.
 - **FR-019**: Steps from different dishes scheduled at overlapping times MUST both appear in the
   schedule with a clear indication that they run in parallel.
 - **FR-020**: Users MUST be able to add or remove dishes from a meal plan, with the schedule
@@ -287,8 +293,9 @@ and that confirming start dismisses the alarm and marks the step as started.
   "ready by" time, ordered list of Dishes.
 - **Dish**: An entry in a Meal Plan representing one recipe's worth of steps. Sourced from a saved
   Recipe or defined inline as ad-hoc Steps. Attributes: display name, step list.
-- **Schedule**: The computed output for a Dish or Meal Plan. Contains a chronologically-ordered list
-  of Step Events, each with: dish name, step name, step type, and calculated start time.
+- **Schedule**: The computed output for a Dish or Meal Plan. Contains a set of Step Events, each
+  with: dish name, step name, step type, calculated start time, and duration. Rendered in Gantt
+  view (default, one lane per dish) or chronological list view, switchable by the user.
 
 ## Success Criteria *(mandatory)*
 
