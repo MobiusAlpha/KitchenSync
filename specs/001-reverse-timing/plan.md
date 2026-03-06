@@ -6,10 +6,15 @@
 ## Summary
 
 KitchenSync is a reverse-timing cooking scheduler delivered as an installable Progressive Web App.
-Users define meal steps with durations, set a target "ready by" time, and receive a backward-calculated
-schedule. During active cooking, a live timer session counts down to each step, fires alarms, and
-cascades any delays forward through unstarted steps in the same dish, displaying the updated meal
-completion time after every change.
+Users define meal components with durations — either as a single total-duration block or as a series
+of named stages — set a target "ready by" time, and receive a backward-calculated schedule showing
+when to start every step across all dishes. The default schedule view is a Gantt chart with one lane
+per dish; a chronological list view is also available. Single-block components can be expanded into
+named stages inline at any time, with a diff label showing the change vs. the original estimate.
+
+During active cooking, a live timer session counts down to each step, fires alarms, and cascades any
+delays forward through unstarted steps in the same dish, displaying the updated meal completion time
+after every change.
 
 The app is local-only (no backend, no accounts, no cloud sync in v1). All logic is structured as
 independently testable TypeScript libraries consumed by a Vite + React PWA shell, styled with
@@ -123,7 +128,11 @@ apps/
     │   ├── icons/           # PWA icons (192, 512 px)
     │   └── manifest.webmanifest
     ├── src/
-    │   ├── components/      # React components (recipe editor, schedule view, timer)
+    │   ├── components/
+    │   │   ├── GanttView/       # Gantt chart (pure CSS lanes + blocks, FR-012a)
+    │   │   ├── ScheduleView/    # Wrapper: Gantt/list toggle + delegates to GanttView or ListView
+    │   │   ├── BlockExpansion/  # Inline stage-expansion panel for single-block dishes (FR-033)
+    │   │   └── …               # RecipeEditor, StepForm, TimerView, DelayControls, etc.
     │   ├── pages/           # Route-level pages
     │   ├── hooks/           # Custom React hooks (useSchedule, useTimer, useAlarm)
     │   ├── store/           # Zustand or React context state
@@ -158,6 +167,20 @@ own Vitest suite. The PWA app is the sole integration point — no backend in v1
 ## Phase 1 Design Decisions
 
 *See [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).*
+
+## Post-Design Constitution Re-check (Session 2026-03-06)
+
+Following clarifications that introduced Gantt view, single-block entry, and inline block expansion:
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Library-First | ✅ PASS | No new packages required. Gantt rendering is pure CSS in the PWA layer; `BlockExpansion` is a UI component consuming existing `meal-model` types. All new logic (optional Step name/type, `originalEstimateMinutes`) lives in `meal-model` and `scheduler` library contracts. |
+| II. Test-First / TDD | ✅ PASS | New contract surfaces (optional fields, `BlockExpansionProps`, `ScheduleViewMode`, `StepEvent.durationMinutes`) are all interface-level — tests will target these contracts before implementation. |
+| III. Input Validation | ✅ PASS | Block expansion input (draft stages) passes through `validateStep()` before `onExpand` fires. `originalEstimateMinutes` is set only by internal code paths (never raw user input). No new trust boundaries introduced. |
+| IV. Documentation Standards | ✅ PASS | All new contract interfaces and fields carry TSDoc. |
+| V. Cloud-Native Platform | ⚠️ PARTIAL (unchanged) | Same trade-off as original — no backend in v1. Acknowledged. |
+
+**No new violations or unacknowledged trade-offs introduced by the 2026-03-06 clarifications.**
 
 ## Open Questions (resolved during planning)
 
