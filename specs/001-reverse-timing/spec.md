@@ -19,6 +19,10 @@ individual dishes, and can be timed together."
 - Q: Step-level delay cascade? → A: Cascade — delaying a step shifts all subsequent unstarted steps in the same dish by the same amount. After any delay, the app displays the updated effective meal completion time.
 - Q: Alarm default state? → A: A global app setting controls the default (ships as "all on"). The cook can override at the meal level, then at the dish level, then toggle individual steps. Each level inherits from its parent unless explicitly overridden.
 
+### Session 2026-03-06
+
+- Q: Should the app support adding a component as a single total-duration block (no named stages)? → A: Yes — single-block entry is supported (name + total duration only). Internally this auto-creates a single unnamed/default step; no distinct UI mode is exposed. The same entry flow handles both single-block and staged components.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Single-Dish Reverse Schedule (Priority: P1)
@@ -184,10 +188,12 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 #### Recipe Management
 
-- **FR-001**: Users MUST be able to create a recipe with a name and an ordered list of one or more
-  named steps.
-- **FR-002**: Each step MUST have a name, a step type (one of: Prep, Cook, Rest, Cooldown), and a
-  duration expressed as a positive whole number of minutes.
+- **FR-001**: Users MUST be able to create a recipe with a name and either (a) an ordered list of
+  one or more named steps, or (b) a single total-duration block (name + duration only, no explicit
+  step decomposition). Option (b) is stored internally as a single auto-generated step.
+- **FR-002**: Each step MUST have a duration expressed as a positive whole number of minutes. Step
+  name and step type (one of: Prep, Cook, Rest, Cooldown) are optional when a component is entered
+  as a single total-duration block; they are required when steps are entered individually.
 - **FR-003**: Users MUST be able to save a recipe for future use.
 - **FR-004**: Users MUST be able to view, edit (name, steps, durations, order), and delete any
   saved recipe.
@@ -196,10 +202,11 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 #### Ad-hoc Timing
 
-- **FR-007**: Users MUST be able to start a timing session by entering steps directly, without
-  creating or selecting a saved recipe.
-- **FR-008**: Ad-hoc steps MUST support the same step types and duration configuration as steps
-  within a saved recipe.
+- **FR-007**: Users MUST be able to start a timing session by entering a component directly — either
+  as a single total-duration block or as a series of named steps — without creating or selecting a
+  saved recipe.
+- **FR-008**: Ad-hoc components MUST support both entry forms: single total-duration block and
+  individual named steps with optional types, matching the same options available in saved recipes.
 - **FR-009**: Users MUST be able to save an ad-hoc set of steps as a named recipe at any point
   during or after the session.
 
@@ -272,8 +279,9 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 - **Recipe**: A named, reusable collection of ordered Steps. Attributes: name, optional description,
   ordered list of Steps, creation date, last-modified date.
-- **Step**: A single timed action within a Recipe or ad-hoc session. Attributes: name, type
-  (Prep / Cook / Rest / Cooldown), duration in whole minutes.
+- **Step**: A single timed action within a Recipe or ad-hoc session. Attributes: duration in whole
+  minutes (required); name and type (Prep / Cook / Rest / Cooldown) are optional. When a component
+  is entered as a single total-duration block, one Step is auto-generated with no name/type.
 - **Meal Plan**: A collection of Dishes sharing a single target time. Attributes: name, target
   "ready by" time, ordered list of Dishes.
 - **Dish**: An entry in a Meal Plan representing one recipe's worth of steps. Sourced from a saved
