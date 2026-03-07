@@ -2,22 +2,24 @@
  * @contract alarm-scheduler (addendum: 002-do-alongside)
  * Package: @kitchensync/alarm-scheduler
  *
- * Additive extension to the alarm-scheduler contract from 001-reverse-timing.
- * Introduces parallelGroupId on LiveStepState and updates:
- *   - createLiveSession: populates parallelGroupId from StepEvent
- *   - applyStepDelay: cascade stops at group boundary for companion steps
+ * Updates LiveStepState with stageId and trackId.
+ * Introduces isStageComplete() (replaces the 001 group-completion concept).
+ * Updates applyStepDelay with Stage/Track-aware cascade boundaries.
  *
- * Unchanged functions: tickSession, confirmStepStarted, resolveAlarmEnabled,
+ * Unchanged: tickSession, confirmStepStarted, resolveAlarmEnabled,
  * setAlarmOverride, applyDishDelay, applyMealDelay, acceptNewTargetTime.
  */
 
 import type { WallClockTime } from './timing-engine';
+import type { LiveSession, SessionCommand } from './alarm-scheduler';
+import type { Schedule } from './scheduler';
 
 // ─── Extended LiveStepState ───────────────────────────────────────────────────
 
 /**
- * Extended runtime state for one step, with parallel group membership.
- * All existing fields are unchanged.
+ * Runtime state for one step in a LiveSession.
+ *
+ * Two new fields are added. All existing fields are unchanged.
  */
 export interface LiveStepState {
   readonly stepId: string;
@@ -29,103 +31,108 @@ export interface LiveStepState {
   readonly confirmedAt: number | null;
   readonly delayAppliedMinutes: number;
   /**
-   * NEW. The anchor step's id if this step belongs to an intra-dish parallel
-   * group; null otherwise. Mirrors StepEvent.parallelGroupId.
+   * NEW. The Stage id this step belongs to. Mirrors StepEvent.stageId.
    *
-   * Used by:
-   *   1. TimerView: gate the join step's "Mark Started" button until all states
-   *      sharing this parallelGroupId have confirmedAt !== null.
-   *   2. applyStepDelay: determine cascade boundary (companion steps do not
-   *      cascade beyond themselves).
+   * Used by isStageComplete() to determine when all members of a parallel Stage
+   * are confirmed, enabling the first step of the subsequent Stage.
    */
-  readonly parallelGroupId: string | null;
+  readonly stageId: string;
+  /**
+   * NEW. The Track id this step belongs to within its Stage. Mirrors StepEvent.trackId.
+   *
+   * Used by applyStepDelay to enforce the per-track cascade boundary:
+   * delays cascade within a Track only; they do not cross into sibling Tracks
+   * within the same Stage.
+   */
+  readonly trackId: string;
 }
 
-// ─── Updated createLiveSession contract ───────────────────────────────────────
+// ─── Updated createLiveSession ────────────────────────────────────────────────
 
 /**
  * Creates a LiveSession from a computed Schedule.
  *
- * Addendum: populates LiveStepState.parallelGroupId from StepEvent.parallelGroupId
- * for every event in the schedule.
+ * Updated to populate stageId and trackId on each LiveStepState from the
+ * corresponding StepEvent fields.
  *
  * All other behaviour is unchanged from 001-reverse-timing.
  */
 export interface CreateLiveSession {
   (
-    schedule: import('./scheduler').Schedule,
+    schedule: Schedule,
     mealPlanId: string | null,
     nowMs: number,
     globalConfig: { readonly id: 'global'; readonly defaultEnabled: boolean },
-  ): import('./alarm-scheduler').LiveSession;
+  ): LiveSession;
 }
 
-// ─── Updated applyStepDelay contract ─────────────────────────────────────────
+// ─── Stage completion helper ──────────────────────────────────────────────────
 
 /**
- * Applies a delay to a specific step, with updated cascade rules for parallel groups.
+ * Returns true when every LiveStepState in the session that shares the given
+ * stageId has confirmedAt !== null (i.e., all parallel tracks in the Stage
+ * have been individually confirmed by the cook).
  *
- * Cascade rules (extension of 001-reverse-timing rules):
+ * Used by TimerView to gate the "Mark Started" button on the first step of
+ * the Stage that follows the specified Stage.
  *
- * CASE 1 — Target step is NOT in a parallel group (parallelGroupId === null):
+ * Pure function — does not mutate session state.
+ *
+ * Edge cases:
+ * - stageId not found in session: returns true (no members → trivially complete).
+ * - All members started: returns true.
+ * - Any member unconfirmed: returns false.
+ *
+ * @param session - Current LiveSession.
+ * @param stageId - The Stage to check.
+ * @returns boolean — whether all steps in the Stage are confirmed.
+ */
+export interface IsStageComplete {
+  (session: LiveSession, stageId: string): boolean;
+}
+
+// ─── Updated applyStepDelay ───────────────────────────────────────────────────
+
+/**
+ * Applies a timed delay to a specific step with Stage/Track-aware cascade rules.
+ *
+ * CASE 1 — Step is in a single-track Stage (tracks.length === 1):
  *   Behaviour unchanged from 001-reverse-timing:
- *   - If step is started: cascade to all unstarted backbone steps after it in same dish.
- *   - If step is not started: cascade from this step forward through unstarted backbone
- *     steps in same dish.
+ *   Shift scheduledStart of the target step and all subsequent unstarted steps
+ *   in the same Track (which is also the same Dish).
+ *   Stop at Dish boundary.
  *
- * CASE 2 — Target step IS a companion (parallelGroupId !== null AND stepId !== parallelGroupId):
- *   - Shift scheduledStart of this companion step only.
- *   - Do NOT cascade further. A companion is the terminal node of its mini-track.
- *   - Rationale: cross-track delay propagation is out of scope (spec FR-011, Assumptions).
- *
- * CASE 3 — Target step IS an anchor (parallelGroupId !== null AND stepId === parallelGroupId):
- *   - Shift scheduledStart of this anchor step.
- *   - Cascade forward to unstarted backbone steps after this anchor (the join step and beyond).
- *   - Do NOT cascade to companion siblings (they are lateral, not downstream).
+ * CASE 2 — Step is in a multi-track Stage:
+ *   Shift scheduledStart of the target step and all subsequent unstarted steps
+ *   in the SAME Track only.
+ *   Do NOT cascade to:
+ *     (a) Sibling Tracks in the same Stage — cross-track propagation is out of scope.
+ *     (b) Subsequent Stages — the join point is fixed; the cook absorbs the wait.
+ *   Rationale: the Stage's end time (join point) is a structural constraint.
+ *   A delayed track starts earlier relative to the join; the join doesn't move.
  *
  * In all cases:
- * - scheduledStart is monotonically non-decreasing (delays never move steps backward).
- * - started steps are always skipped.
- * - Dish boundaries are always respected.
- * - Emits UPDATE_DISPLAY command.
+ * - scheduledStart is monotonically non-decreasing (delays never move events backward).
+ * - Started steps (confirmedAt !== null) are always skipped.
+ * - Dish and Session boundaries are respected.
+ * - Emits UPDATE_DISPLAY command with the updated effective meal end time.
+ *
+ * Note: "Subsequent steps in the same Track" means steps with a higher index
+ * in their Track's steps[] AND in subsequent Stages on the same Dish's timeline
+ * (for single-track stages only, per CASE 1).
  *
  * @param session - Current LiveSession.
  * @param stepId - ID of the step to delay.
  * @param delayMinutes - Positive integer minutes to add.
- * @returns Updated session + commands tuple (same shape as 001-reverse-timing).
+ * @returns Updated session + commands tuple.
  */
 export interface ApplyStepDelay {
   (
-    session: import('./alarm-scheduler').LiveSession,
+    session: LiveSession,
     stepId: string,
     delayMinutes: number,
   ): {
-    session: import('./alarm-scheduler').LiveSession;
-    commands: readonly import('./alarm-scheduler').SessionCommand[];
+    readonly session: LiveSession;
+    readonly commands: readonly SessionCommand[];
   };
-}
-
-// ─── Group completion helper ──────────────────────────────────────────────────
-
-/**
- * Returns true if every LiveStepState in the given session that shares the
- * specified parallelGroupId has confirmedAt !== null.
- *
- * Used by TimerView to determine whether the join step's "Mark Started" button
- * should be enabled.
- *
- * Returns true if parallelGroupId is null (non-grouped steps are always unblocked).
- * Returns true if the group has no members (degenerate case, should not occur).
- *
- * Pure function — does not modify session state.
- *
- * @param session - Current LiveSession.
- * @param parallelGroupId - The group to check, or null.
- * @returns boolean indicating whether all group members are confirmed.
- */
-export interface IsParallelGroupComplete {
-  (
-    session: import('./alarm-scheduler').LiveSession,
-    parallelGroupId: string | null,
-  ): boolean;
 }

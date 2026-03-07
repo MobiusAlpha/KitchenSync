@@ -2,105 +2,115 @@
  * @contract ui-contracts (addendum: 002-do-alongside)
  * Package: apps/pwa
  *
- * UI contracts for the "Do Alongside" feature.
- * Describes prop shapes and interaction contracts for modified/new components.
+ * UI contracts for the Stage/Track model. Describes prop shapes and interaction
+ * contracts for modified/new components.
  */
 
-import type { CompanionStep, StepWithCompanions } from './meal-model';
+import type { Stage, Track, Step } from './meal-model';
 import type { LiveSession, AlarmScope } from './alarm-scheduler';
-import type { Schedule } from './scheduler';
+import type { Schedule, StepEvent } from './scheduler';
+import type { WallClockTime } from './timing-engine';
 
-// ─── StepForm (extended) ──────────────────────────────────────────────────────
+// ─── StageEditor ──────────────────────────────────────────────────────────────
 
 /**
- * Extended StepForm props. The existing onChange callback now carries
- * StepWithCompanions[] (backward-compatible: CompanionStep.companions defaults
- * to [] when absent).
+ * Replaces StepForm as the primary editing component for a Dish/Recipe's
+ * step structure. Renders a vertical list of Stages; each Stage renders its
+ * Tracks side-by-side (for multi-track) or inline (for single-track).
  *
- * New UX: each step card in the list exposes a contextual menu with three actions:
- *   - "Edit": existing behaviour (inline edit form)
- *   - "Delete": existing behaviour (remove step)
- *   - "Do Alongside": opens CompanionStepForm nested under the anchor card
- *
- * Companion steps render as indented sub-cards under their anchor, each with
- * their own contextual menu: "Edit" and "Delete" only (no "Do Alongside" on
- * companions — nesting is forbidden).
+ * Interactions:
+ *   - "Add Stage" button: appends a new single-track Stage with an empty Track.
+ *   - "Add Track" within a Stage: appends a new empty Track to that Stage
+ *     (activates the "Do Alongside" parallel behaviour for that Stage).
+ *   - "Remove Track" within a Stage: removes the Track; if last Track, removes Stage.
+ *   - "Add Step" within a Track: opens StepForm inline for the Track's steps list.
+ *   - Move Stage up/down: reorders Stages.
+ *   - Move Step up/down within Track: reorders Steps in a Track.
+ *   - Delete Stage: removes Stage and all its Tracks and Steps.
+ *   - Delete Step: removes Step from Track; if last Step in last Track, removes Stage.
  */
-export interface StepFormProps {
-  readonly steps: readonly StepWithCompanions[];
-  readonly onChange: (steps: readonly StepWithCompanions[]) => void;
+export interface StageEditorProps {
+  readonly stages: readonly Stage[];
+  readonly onChange: (stages: readonly Stage[]) => void;
   readonly disabled?: boolean;
 }
 
-// ─── CompanionStepForm ────────────────────────────────────────────────────────
+// ─── TrackEditor ─────────────────────────────────────────────────────────────
 
 /**
- * Inline form rendered under an anchor step card when the user selects
- * "Do Alongside". Structurally identical to the existing inline step form
- * (name, type, durationMinutes fields) but saves a CompanionStep rather than
- * a full Step.
+ * Renders and edits the Steps within a single Track.
+ * Visually equivalent to the old StepForm but scoped to one Track.
  *
- * Displayed only while creating or editing a companion. Dismissed on save or cancel.
+ * Displayed within a StageEditor as one column of a multi-column Stage layout.
  */
-export interface CompanionStepFormProps {
-  /** The anchor step this companion belongs to. Display-only (shown in header). */
-  readonly anchorStepName: string;
-  /** Existing companion to edit, or null for new companion. */
-  readonly initialCompanion: CompanionStep | null;
-  readonly onSave: (companion: CompanionStep) => void;
-  readonly onCancel: () => void;
+export interface TrackEditorProps {
+  readonly track: Track;
+  readonly onChange: (track: Track) => void;
+  readonly disabled?: boolean;
 }
 
-// ─── ScheduleView (extended) ──────────────────────────────────────────────────
+// ─── ScheduleView (updated) ───────────────────────────────────────────────────
 
 /**
- * ScheduleView receives the same Schedule prop as before.
+ * ScheduleView receives the same Schedule prop. Updated rendering:
  *
- * Extended rendering behaviour:
- * - Events with parallelGroupId !== null are visually grouped.
- * - Within a group, events render with a left-border or background accent
- *   (implementation detail; the key contract is grouping must be perceptible
- *   without reading text).
- * - A group header row (or inline badge) identifies the shared end time.
- * - The existing "⇔ parallel" badge (for cross-dish isParallel) is unchanged.
+ * Events are grouped by stageId. Within a Stage group:
+ * - Single-track Stages: render as a single row (unchanged from 001).
+ * - Multi-track Stages: render as a grouped block with a left-border accent.
+ *   Within the block, each Track's events render in a sub-row identified by trackId.
+ *   The Stage's shared end time is shown as a "join" label on the right.
  *
- * No new props required — grouping is derived from StepEvent.parallelGroupId.
+ * isConcurrentWithOtherDish drives the "⇔ concurrent" badge (replaces the old
+ * isParallel badge, which now has a different meaning).
+ *
+ * isParallel (intra-dish Stage parallelism) drives the Track lane grouping.
  */
 export interface ScheduleViewProps {
   readonly schedule: Schedule | null;
 }
 
-// ─── GanttView (extended) ─────────────────────────────────────────────────────
+// ─── GanttView (updated) ─────────────────────────────────────────────────────
 
 /**
- * GanttView renders a horizontal timeline. Extended rendering for companions:
- * - Companion bars appear on a sub-row directly under their anchor bar within
- *   the same dish lane.
- * - All bars in a parallel group share the same right-edge (end time).
- * - Companion bars are visually distinguished (e.g., dashed border, lighter fill).
+ * GanttView renders a horizontal timeline. Updated for Stage/Track:
  *
- * No new props required — companion relationships are derived from
- * StepEvent.parallelGroupId.
+ * - One row per Dish.
+ * - Within a Dish row, each Stage occupies a horizontal band.
+ * - Single-track Stages: one bar filling the band.
+ * - Multi-track Stages: one bar per Track, stacked vertically within the band.
+ *   All bars in the Stage share the same right edge (stageEndTime).
+ * - Track bars are color-coded by step type within the Track (gradient or dominant type).
+ * - A vertical "join" line is drawn at each Stage boundary.
  */
 export interface GanttViewProps {
   readonly schedule: Schedule | null;
 }
 
-// ─── TimerView (extended) ─────────────────────────────────────────────────────
+// ─── TimerView (updated) ─────────────────────────────────────────────────────
 
 /**
- * TimerView receives the same props as before plus one new callback and one
- * new helper derived from alarm-scheduler.
+ * TimerView renders the live countdown session. Updated for Stage/Track:
  *
- * Extended rendering behaviour:
- * - Step states sharing a parallelGroupId are rendered as a grouped card with
- *   a "Running in parallel" header.
- * - Each member of the group shows its own individual timer countdown and
- *   "Mark Started" button.
- * - The join step's "Mark Started" button is DISABLED until isParallelGroupComplete
- *   returns true for the step's parallelGroupId.
- * - Once all group members are confirmed, the join step's button becomes active
- *   with no other change to state machine behaviour.
+ * Step states are grouped by stageId. Rendering per group:
+ *
+ * SINGLE-TRACK STAGE (tracks.length === 1):
+ *   Renders identically to 001-reverse-timing (one card per step).
+ *
+ * MULTI-TRACK STAGE (tracks.length > 1):
+ *   Renders a "Running in parallel" header card.
+ *   Each Track's steps render in a sub-group within the stage card.
+ *   Each step has its own individual countdown, status badge, and "Mark Started" button.
+ *   DelayControls and AlarmToggleControls are per-step (unchanged).
+ *
+ * STAGE GATE (applies to the FIRST step of each Stage after a multi-track Stage):
+ *   The "Mark Started" button is DISABLED until isStageComplete(session, precedingStageId)
+ *   returns true.
+ *   A visible "Waiting for parallel steps to complete" label explains the disabled state.
+ *   Once all steps in the preceding Stage are confirmed, the button activates with no
+ *   other state change (the alarm already fired on schedule).
+ *
+ * Props are unchanged from 001-reverse-timing except:
+ *   - isStageComplete helper is required for the gate check.
  */
 export interface TimerViewProps {
   readonly session: LiveSession;
@@ -117,40 +127,40 @@ export interface TimerViewProps {
     targetId: string | null,
     enabled: boolean,
   ) => void;
-  readonly onAcceptNewTargetTime: (proposedTime: import('./timing-engine').WallClockTime) => void;
+  readonly onAcceptNewTargetTime: (proposedTime: WallClockTime) => void;
+  /** Injected helper — pure function, no side effects. */
+  readonly isStageComplete: (session: LiveSession, stageId: string) => boolean;
 }
 
-// ─── Interaction contract: "Do Alongside" gesture ────────────────────────────
+// ─── Interaction contract: "Do Alongside" (add Track to Stage) ────────────────
 
 /**
- * The full interaction flow for adding a companion step:
+ * Full interaction flow for creating a parallel track within a Stage:
  *
- * 1. User views step list in StepForm (recipe editor or planner).
- * 2. User taps/clicks the context menu icon (⋮) on any backbone step card.
- * 3. A dropdown appears with: Edit | Delete | Do Alongside.
- * 4. User selects "Do Alongside".
- * 5. CompanionStepForm expands inline below the anchor card.
- * 6. User fills in companion name, type, duration and taps Save.
- * 7. A new CompanionStep is appended to anchor.companions[].
- * 8. StepForm calls onChange with the updated steps array.
- * 9. Schedule recalculates; companion StepEvent appears in ScheduleView/GanttView.
+ * 1. User views StageEditor. Each Stage has a footer row with an "Add Track" button.
+ *    (For single-track Stages, this button is labelled "Do Alongside".)
+ * 2. User clicks "Add Track" / "Do Alongside" on a Stage.
+ * 3. A new empty Track column appears in that Stage's row.
+ * 4. The new Track column shows an empty TrackEditor with an "Add Step" form.
+ * 5. User fills in step(s) and saves.
+ * 6. StageEditor calls onChange with updated stages.
+ * 7. Schedule recalculates; the Stage now emits multi-track StepEvents.
  *
- * Editing a companion:
- * 1. User taps the context menu on a companion sub-card.
- * 2. Dropdown: Edit | Delete (no "Do Alongside" option).
- * 3. Edit: CompanionStepForm opens pre-populated with companion data.
- * 4. Save: companion is replaced in anchor.companions[]; onChange fires.
+ * Removing a Track:
+ * 1. Each Track column shows a "Remove Track" (×) button.
+ * 2. Clicking removes the Track from the Stage.
+ * 3. If only one Track remains, the Stage reverts to a sequential stage.
+ * 4. If zero Tracks would remain (last Track deleted), the entire Stage is removed.
+ * 5. StageEditor calls onChange.
  *
- * Deleting a companion:
- * 1. User taps Delete on a companion sub-card.
- * 2. Companion is removed from anchor.companions[].
- * 3. If anchor.companions becomes empty, anchor reverts to a plain sequential step.
- * 4. onChange fires; schedule recalculates.
+ * Visual model for a two-track Stage in StageEditor:
  *
- * Deleting an anchor step:
- * - Behaves identically to existing step deletion.
- * - The anchor and ALL its companions are removed together.
- * - The caller (StepForm) removes the entire Step object including its companions.
+ *   ┌─ Stage 2 ─────────────────────────────────────────────────┐
+ *   │  Track A                │  Track B                        │
+ *   │  [Brine chicken 45m]   │  [Prep vegetables 10m]          │
+ *   │  [+ Add step]          │  [+ Add step]   [× Remove track] │
+ *   │                        │  [+ Add Track]                   │
+ *   └──────────────────────────────────────────────────────────-┘
  */
 export type DoAlongsideInteractionContract = typeof _doAlongsideNoop;
 declare const _doAlongsideNoop: unique symbol;

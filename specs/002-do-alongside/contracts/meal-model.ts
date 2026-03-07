@@ -2,97 +2,194 @@
  * @contract meal-model (addendum: 002-do-alongside)
  * Package: @kitchensync/meal-model
  *
- * Additive extension to the meal-model contract from 001-reverse-timing.
- * Introduces CompanionStep and extends Step with an optional companions field.
+ * Replaces the flat steps: Step[] on Dish and Recipe with a Stage/Track
+ * structure that correctly models arbitrary sequences of parallel step groups.
  *
- * All existing types and validators are unchanged.
- * New exports are additive and backward-compatible.
+ * The Step entity is unchanged. Two new entities are introduced: Track and Stage.
+ * Dish and Recipe replace their `steps` field with `stages`.
+ *
+ * Backward-compatible at read time via a deserialization adapter.
  */
 
 import type { StepType, ValidationResult } from './meal-model';
 
-// ─── New Entity ───────────────────────────────────────────────────────────────
+// ─── Step (unchanged) ─────────────────────────────────────────────────────────
 
-/**
- * A timed action that runs in parallel with its anchor Step, sharing the same
- * end time. CompanionSteps are always embedded inside their anchor Step;
- * they are never stored or referenced independently.
- *
- * Structurally identical to Step minus the `companions` field, which is
- * deliberately absent to enforce the one-level-deep invariant.
- */
-export interface CompanionStep {
-  /** UUID v4. Must be unique within the containing Dish/Recipe. */
+/** Unchanged from 001-reverse-timing. */
+export interface Step {
   readonly id: string;
-  /** 1–80 characters. Must not be blank. */
   readonly name: string;
   readonly type: StepType;
-  /** Positive integer, 1–1440 minutes. */
   readonly durationMinutes: number;
 }
 
-// ─── Extended Entity ──────────────────────────────────────────────────────────
+// ─── New Entity: Track ────────────────────────────────────────────────────────
 
 /**
- * Extension of the Step entity with an optional companions field.
- * When companions is absent or empty, behaviour is identical to 001-reverse-timing.
+ * One sequential line of execution within a Stage.
+ *
+ * All Tracks in the same Stage share the same end time (join point).
+ * A Stage with a single Track is equivalent to a sequential step group.
+ *
+ * Steps within a Track execute in order (index 0 is first).
  */
-export interface StepWithCompanions {
+export interface Track {
+  /** UUID v4. Unique within the containing Dish/Recipe. Immutable after creation. */
+  readonly id: string;
+  /** Ordered steps. At least one required. Max 50. */
+  readonly steps: readonly Step[];
+}
+
+// ─── New Entity: Stage ────────────────────────────────────────────────────────
+
+/**
+ * One time slot in the Dish's cooking schedule.
+ *
+ * Contains one or more Tracks that all complete at the Stage's shared end time
+ * (the join point). The scheduler enforces the shared-end-time invariant.
+ *
+ * Stages within a Dish execute sequentially:
+ *   Stage[i].endTime === Stage[i+1].startTime
+ *   Stage[last].endTime === MealPlan.targetTime (or Dish targetTime)
+ */
+export interface Stage {
+  /** UUID v4. Unique within the containing Dish/Recipe. Immutable after creation. */
+  readonly id: string;
+  /** Parallel tracks. At least one required. Max 10. */
+  readonly tracks: readonly Track[];
+}
+
+// ─── Modified Entity: Dish ────────────────────────────────────────────────────
+
+/**
+ * Dish replaces steps: Step[] with stages: Stage[].
+ * All other fields are unchanged from 001-reverse-timing.
+ */
+export interface Dish {
+  readonly id: string;
+  readonly displayName: string;
+  readonly sourceRecipeId: string | null;
+  /** Ordered Stages. At least one required. Max 20. */
+  readonly stages: readonly Stage[];
+}
+
+// ─── Modified Entity: Recipe ──────────────────────────────────────────────────
+
+/**
+ * Recipe replaces steps: Step[] with stages: Stage[].
+ * All other fields are unchanged from 001-reverse-timing.
+ */
+export interface Recipe {
   readonly id: string;
   readonly name: string;
-  readonly type: StepType;
-  readonly durationMinutes: number;
-  /**
-   * Zero or more companion steps that run in parallel with this step.
-   * All companions share this step's end time (the join point).
-   *
-   * When present and non-empty, this step is an anchor step.
-   * Its id serves as the parallelGroupId for the entire group.
-   *
-   * Max 10 companions per anchor step.
-   */
-  readonly companions?: readonly CompanionStep[];
+  readonly description?: string;
+  /** Ordered Stages. At least one required. Max 20. */
+  readonly stages: readonly Stage[];
+  readonly createdAt: number;
+  readonly updatedAt: number;
 }
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
 /**
- * Validates a CompanionStep object.
+ * Validates a Track object.
+ *
+ * Error field paths: `steps[${index}].${fieldName}` for step-level failures.
  *
  * @param input - Unknown value to validate.
- * @returns ValidationResult<CompanionStep> — never throws.
+ * @returns ValidationResult<Track> — never throws.
  */
-export interface ValidateCompanionStep {
-  (input: unknown): ValidationResult<CompanionStep>;
+export interface ValidateTrack {
+  (input: unknown): ValidationResult<Track>;
 }
 
 /**
- * Validates a Step object including its optional companions array.
- * Extends the existing validateStep signature; companions validation is additive.
+ * Validates a Stage object including all contained Tracks and Steps.
  *
- * Error field paths for companion failures use the form:
- *   `companions[${index}].${fieldName}`
+ * Error field paths: `tracks[${i}].steps[${j}].${fieldName}`.
  *
  * @param input - Unknown value to validate.
- * @returns ValidationResult<StepWithCompanions> — never throws.
+ * @returns ValidationResult<Stage> — never throws.
  */
-export interface ValidateStep {
-  (input: unknown): ValidationResult<StepWithCompanions>;
+export interface ValidateStage {
+  (input: unknown): ValidationResult<Stage>;
 }
 
-// ─── Deserialization ──────────────────────────────────────────────────────────
+/**
+ * Validates a Dish object with the new stages: Stage[] field.
+ * Replaces the 001 validateDish signature.
+ *
+ * @param input - Unknown value to validate.
+ * @returns ValidationResult<Dish> — never throws.
+ */
+export interface ValidateDish {
+  (input: unknown): ValidationResult<Dish>;
+}
 
 /**
- * Safely deserializes a Step (including companions) from IndexedDB raw data.
+ * Validates a Recipe object with the new stages: Stage[] field.
+ * Replaces the 001 validateRecipe signature.
  *
- * Defensive behaviour:
- * - If companions is absent or null, returns companions: [].
- * - Each companion element is validated; invalid elements are dropped with a
- *   console.warn (same pattern as existing step deserialization).
+ * @param input - Unknown value to validate.
+ * @returns ValidationResult<Recipe> — never throws.
+ */
+export interface ValidateRecipe {
+  (input: unknown): ValidationResult<Recipe>;
+}
+
+// ─── Deserialization & Migration ──────────────────────────────────────────────
+
+/**
+ * Detects the storage format of a raw Dish or Recipe record and upgrades it
+ * if necessary.
+ *
+ * Old format detection: record has a top-level `steps` array and no `stages`.
+ *
+ * Upgrade rule (old → new):
+ *   { steps: [S1, S2, S3] }
+ *   →
+ *   { stages: [
+ *       { id: uuid(), tracks: [{ id: uuid(), steps: [S1] }] },
+ *       { id: uuid(), tracks: [{ id: uuid(), steps: [S2] }] },
+ *       { id: uuid(), tracks: [{ id: uuid(), steps: [S3] }] },
+ *     ] }
+ *
+ * Each old Step becomes its own single-track Stage, preserving sequential order.
+ *
+ * If the record already has `stages`, it is returned unchanged.
+ * Returns null if the record is fatally invalid (not an object, missing id, etc.).
+ *
+ * After calling this function, callers SHOULD write the upgraded record back to
+ * IndexedDB in the background so that future reads see the new format.
  *
  * @param raw - Raw object from IndexedDB.
- * @returns A valid StepWithCompanions or null if the raw object is fatally invalid.
+ * @returns Upgraded raw object with stages: Stage[] (not yet validated), or null.
  */
-export interface DeserializeStep {
-  (raw: unknown): StepWithCompanions | null;
+export interface UpgradeRecord {
+  (raw: unknown): Record<string, unknown> | null;
+}
+
+/**
+ * Safely deserializes a Dish from IndexedDB raw data, including format upgrade.
+ *
+ * Calls UpgradeRecord internally, then validates the result.
+ * Invalid stages/tracks/steps are dropped with console.warn (defensive pattern).
+ * Returns null if the record is fatally invalid.
+ *
+ * @param raw - Raw object from IndexedDB.
+ * @returns Valid Dish or null.
+ */
+export interface DeserializeDish {
+  (raw: unknown): Dish | null;
+}
+
+/**
+ * Safely deserializes a Recipe from IndexedDB raw data, including format upgrade.
+ * Mirrors DeserializeDish.
+ *
+ * @param raw - Raw object from IndexedDB.
+ * @returns Valid Recipe or null.
+ */
+export interface DeserializeRecipe {
+  (raw: unknown): Recipe | null;
 }
