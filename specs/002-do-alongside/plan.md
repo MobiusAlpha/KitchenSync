@@ -1,15 +1,31 @@
 # Implementation Plan: Intra-Dish Parallel Steps ("Do Alongside")
 
-**Branch**: `002-do-alongside` | **Date**: 2026-03-07 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `specs/002-do-alongside/spec.md`
+**Branch**: `002-do-alongside` | **Date**: 2026-03-07 (revised: Stage/Track model)
+**Spec**: [spec.md](./spec.md)
 
 ---
 
 ## Summary
 
-Extends KitchenSync with intra-dish parallelism: users can attach one or more "companion" steps to any backbone step in a dish. Companions share the anchor step's end time (the join point is always the next sequential backbone step). Under the surface this is a constrained DAG with flat fan-in; the UX surface is a single contextual gesture ("Do Alongside") on any step card.
+Extends KitchenSync with a **Stage/Track** data model that correctly represents
+arbitrary sequences of parallel step groups within a dish — and provides the
+foundational structure for Courses (parallel Dishes) and Services (parallel Courses)
+without requiring a model rewrite at those layers.
 
-Changes are additive across four existing packages: `@kitchensync/meal-model` (new `CompanionStep` entity), `@kitchensync/scheduler` (companion event emission), `@kitchensync/alarm-scheduler` (group-completion gate, cascade boundary), and the PWA (contextual menu, grouped display in schedule and timer views). No new packages are introduced.
+**Supersymmetric pattern**:
+
+| Level | Sequence unit | Parallel unit |
+|-------|--------------|---------------|
+| Dish (this feature) | `Stage` | `Track[]` within Stage |
+| Course (future) | `CourseStage` | `Dish[]` within CourseStage |
+| Service (future) | `ServiceStage` | `Course[]` within ServiceStage |
+
+The scheduler algorithm — reverse-walk stages, then per-stage reverse-walk each track
+from the shared end time — is identical at every level.
+
+**Changes are additive in packages, breaking in storage**: `Dish.steps[]` and
+`Recipe.steps[]` are replaced by `stages: Stage[]`. A read-time deserialization
+adapter upgrades existing records with zero data loss.
 
 ---
 
@@ -17,169 +33,157 @@ Changes are additive across four existing packages: `@kitchensync/meal-model` (n
 
 **Language/Version**: TypeScript 5.x (strict mode)
 **Primary Dependencies**: existing workspace only — pnpm + Turborepo monorepo; React 19, Bootstrap 5, Dexie 4 (IndexedDB), Vitest 2, React Testing Library
-**Storage**: Dexie.js IndexedDB — companions are nested JSON within existing `steps` column; no schema migration required
-**Testing**: Vitest (unit + component); React Testing Library (component integration)
-**Target Platform**: Browser PWA (Progressive Web App); all packages run in-browser or in Vitest (Node-compatible)
-**Project Type**: Monorepo — library packages consumed by a PWA application
-**Performance Goals**: Schedule recalculation with companions ≤ same time budget as equivalent sequential-only dish (SC-002); no new async paths introduced
-**Constraints**: Backward-compatible with all existing stored data; no breaking changes to any public package interface; offline-capable (all logic is client-side)
-**Scale/Scope**: Max 10 companions per anchor step; existing dish/step caps unchanged
+**Storage**: Dexie.js IndexedDB — stages/tracks are nested JSON within existing record structure; no new indexed columns; no schema version bump
+**Testing**: Vitest (unit + integration); React Testing Library (component)
+**Target Platform**: Browser PWA; all packages run in-browser or Vitest (Node-compatible)
+**Performance**: O(S × T × P) where S = stages, T = tracks per stage, P = steps per track; identical constant factor to 001 for sequential dishes
+**Backward Compatibility**: Read-time upgrade adapter; background write-back; one-time per record; no data loss
 
 ---
 
 ## Constitution Check
 
-*GATE: Must pass before research. Re-checked post-design below.*
-
 | Principle | Assessment | Status |
 |-----------|-----------|--------|
-| I. Library-First | `CompanionStep`, updated validators, and cascade logic all live in their respective standalone packages before the PWA consumes them. No PWA-specific logic leaks into libraries. | ✅ PASS |
-| II. Test-First / TDD | Test tasks will precede implementation tasks in `tasks.md`. Tests target `ValidateCompanionStep`, `ScheduleDish`, `ApplyStepDelay`, and `IsParallelGroupComplete` contracts — not concrete types. | ✅ PASS |
-| III. Input Validation | `validateCompanionStep` runs at every trust boundary: storage deserialization (IndexedDB read), PWA form save. Unvalidated companions never reach the scheduler. | ✅ PASS |
-| IV. Documentation Standards | All new/modified public interfaces (`CompanionStep`, `validateCompanionStep`, `parallelGroupId` on StepEvent/LiveStepState, `isParallelGroupComplete`) will carry doc comments. | ✅ PASS |
-| V. Cloud-Native Platform | Feature is entirely client-side (PWA + libraries). No new backend services, no new container concerns. Existing cloud-native constraints are unchanged. | ✅ PASS |
+| I. Library-First | `Stage`, `Track` entities and all validators live in `@kitchensync/meal-model`; `stageId`/`trackId` emit logic in `@kitchensync/scheduler`; `isStageComplete` in `@kitchensync/alarm-scheduler`. No PWA logic leaks into libraries. | ✅ PASS |
+| II. Test-First / TDD | All test tasks precede implementation tasks. Tests target `ValidateTrack`, `ValidateStage`, `ScheduleDish`, `ApplyStepDelay`, `IsStageComplete` contracts. No concrete-type testing. | ✅ PASS |
+| III. Input Validation | `validateTrack` and `validateStage` run at every trust boundary (storage read, form save). Upgrade adapter validates step-by-step before committing to memory. | ✅ PASS |
+| IV. Documentation Standards | All new/modified public interfaces carry doc comments. | ✅ PASS |
+| V. Cloud-Native Platform | Entirely client-side feature. No new backend services. Existing cloud-native constraints unchanged. | ✅ PASS |
 
 **Guiding Design Principles**:
-- **Reliability**: Shared end-time invariant is enforced by the scheduler (deterministic pure function). The cascade boundary for companion steps prevents unintended state mutation.
-- **Maintainability**: Companion data is co-located with its anchor step — no cross-reference maintenance. The one-level-deep type constraint is enforced at the TypeScript type level.
-- **Scalability**: `companions` is a flat array of value objects. No new indexes or schema changes. Max 10 companions per step keeps the UI and scheduler O(n·m) bounded.
-- **Extensibility**: `parallelGroupId` on `StepEvent` and `LiveStepState` is the extension point. Future features (nested parallelism, offset joins) can build on it without modifying existing logic.
+- **Reliability**: Shared end-time invariant is enforced deterministically by the scheduler (pure function). Stage gate logic is a pure predicate (`isStageComplete`) with no side effects.
+- **Maintainability**: The Stage/Track structure is explicit and self-describing; no special-case `companions` field or anchor cross-references. The one-direction storage upgrade is transparent to all callers.
+- **Scalability**: Stage/Track is O(S×T×P); no new indexes; the max-10-tracks and max-20-stages caps keep the UI and scheduler bounded. The supersymmetric design means the Course and Service layers can be added without modifying this layer.
+- **Extensibility**: `stageId` and `trackId` on `StepEvent` and `LiveStepState` are the extension points for future scheduling strategies (offset joins, conditional stages, etc.). Adding a Course layer requires no changes to the Step/Track/Stage model.
 
-**Post-design re-check**: All five principles confirmed satisfied by the design in research.md and data-model.md.
+**Trade-offs acknowledged**:
+- `Dish.steps[]` → `Dish.stages[]` is a breaking schema change. Cost: read-time upgrade adapter. Benefit: eliminates a guaranteed future refactor at the Course and Service layers. Net: correct call.
+- `isParallel` semantics change on `StepEvent`. Old meaning (cross-dish) is preserved in `isConcurrentWithOtherDish`. Any 001 consumer that reads `isParallel` will see changed behaviour. Since 001 is not yet shipped, this is acceptable; the contracts document the change explicitly.
 
 ---
 
 ## Project Structure
 
-### Documentation (this feature)
-
+### Documentation
 ```text
 specs/002-do-alongside/
-├── plan.md              # This file
-├── research.md          # Phase 0 output (9 research decisions)
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output (7 integration scenarios)
+├── plan.md          ← this file
+├── research.md      ← 9 decisions; topology rationale; Stage/Track chosen
+├── data-model.md    ← Stage, Track entities; updated Dish, Recipe, StepEvent, LiveStepState
+├── quickstart.md    ← 8 integration scenarios
 ├── contracts/
-│   ├── meal-model.ts    # CompanionStep, ValidateCompanionStep, ValidateStep, DeserializeStep
-│   ├── scheduler.ts     # Extended StepEvent (parallelGroupId), ScheduleDish addendum
-│   ├── alarm-scheduler.ts # Extended LiveStepState, ApplyStepDelay addendum, IsParallelGroupComplete
-│   └── ui-contracts.ts  # StepFormProps, CompanionStepFormProps, TimerViewProps addenda
-└── tasks.md             # Phase 2 output (generated by /speckit.tasks)
+│   ├── meal-model.ts       ← Track, Stage, Dish, Recipe; validators; upgrade/deserialize
+│   ├── scheduler.ts        ← Extended StepEvent; Stage/Track scheduleDish algorithm
+│   ├── alarm-scheduler.ts  ← Extended LiveStepState; isStageComplete; applyStepDelay cases
+│   └── ui-contracts.ts     ← StageEditor, TrackEditor, ScheduleView, GanttView, TimerView
+└── tasks.md         ← generated by /speckit.tasks
 ```
 
-### Source Code (repository root)
-
+### Source Code
 ```text
 packages/meal-model/
 ├── src/
-│   ├── entities.ts          # + CompanionStep interface; Step.companions?: readonly CompanionStep[]
-│   ├── validators.ts        # + validateCompanionStep(); validateStep() extended for companions
-│   └── index.ts             # + export CompanionStep, validateCompanionStep
+│   ├── entities.ts       # + Track, Stage interfaces; Dish.stages, Recipe.stages replace .steps
+│   ├── types.ts          # unchanged
+│   ├── validators.ts     # + validateTrack(), validateStage(); update validateDish/validateRecipe
+│   ├── deserializers.ts  # + upgradeRecord(), deserializeDish(), deserializeRecipe()
+│   └── index.ts          # + export Track, Stage, validateTrack, validateStage, upgradeRecord
 └── tests/
-    ├── validators.test.ts   # + companion validation tests (new test cases; existing tests immutable)
-    └── deserialize.test.ts  # + companion round-trip tests
+    ├── validators.test.ts      # + Track/Stage validation tests; Dish/Recipe with stages
+    └── deserializers.test.ts   # + upgrade adapter tests; round-trip tests
 
 packages/scheduler/
 ├── src/
-│   ├── types.ts             # StepEvent + parallelGroupId: string | null
-│   └── schedule-dish.ts     # Emit companion StepEvents; set parallelGroupId on anchor events
+│   ├── types.ts          # StepEvent + stageId, trackId, isConcurrentWithOtherDish;
+│   │                     # isParallel semantics updated
+│   └── schedule-dish.ts  # Stage/Track reverse-walk algorithm; shared end time invariant
 └── tests/
-    └── schedule-dish.test.ts  # + companion scheduling tests
+    └── schedule-dish.test.ts  # + multi-track stage tests; chained parallel stages; shared end time
 
 packages/alarm-scheduler/
 ├── src/
-│   ├── types.ts             # LiveStepState + parallelGroupId: string | null
-│   ├── live-session.ts      # createLiveSession: populate parallelGroupId from StepEvent
-│   ├── delay.ts             # applyStepDelay: companion cascade boundary (CASE 2 / CASE 3)
-│   ├── group-complete.ts    # NEW: isParallelGroupComplete pure function
-│   └── index.ts             # + export isParallelGroupComplete
+│   ├── types.ts          # LiveStepState + stageId, trackId
+│   ├── live-session.ts   # createLiveSession: populate stageId/trackId from StepEvent
+│   ├── delay.ts          # applyStepDelay: Cases 1/2 (single-track vs multi-track stage)
+│   ├── group-complete.ts # NEW: isStageComplete() pure function
+│   └── index.ts          # + export isStageComplete
 └── tests/
-    ├── live-session.test.ts      # + parallelGroupId population tests
-    ├── delay-cascade.test.ts     # + companion cascade boundary tests
-    └── group-complete.test.ts    # NEW: isParallelGroupComplete tests
+    ├── live-session.test.ts      # + stageId/trackId population tests
+    ├── delay-cascade.test.ts     # + multi-track cascade boundary tests
+    └── group-complete.test.ts    # NEW: isStageComplete tests
 
 apps/pwa/src/
 ├── components/
-│   ├── StepForm.tsx             # + "Do Alongside" contextual menu; companion sub-cards
-│   ├── CompanionStepForm.tsx    # NEW: inline companion add/edit form
-│   ├── ScheduleView.tsx         # + parallel group visual grouping
-│   └── GanttView/GanttView.tsx  # + companion bars in parallel group lane
+│   ├── StageEditor.tsx          # NEW: replaces StepForm as top-level step editor
+│   ├── TrackEditor.tsx          # NEW: step editor scoped to one Track
+│   ├── ScheduleView.tsx         # + Stage grouping; trackId sub-rows; isConcurrentWithOtherDish badge
+│   └── GanttView/GanttView.tsx  # + Track bars per stage; join lines at stage boundaries
 ├── pages/
-│   └── TimerPage.tsx            # + pass isParallelGroupComplete to TimerView
+│   └── TimerPage.tsx            # + pass isStageComplete to TimerView
 └── components/
-    └── TimerView.tsx             # + grouped parallel step cards; join step gate
+    └── TimerView.tsx            # + Stage-grouped step cards; gate on isStageComplete
 
 apps/pwa/tests/
 ├── components/
-│   ├── StepForm.test.tsx         # + Do Alongside menu; companion form; companion edit/delete
-│   ├── CompanionStepForm.test.tsx # NEW
-│   ├── ScheduleView.test.tsx     # + parallel group rendering tests
-│   ├── GanttView.test.tsx        # + companion bar tests
-│   └── TimerView.test.tsx        # + group gate tests; parallel step rendering
+│   ├── StageEditor.test.tsx     # NEW
+│   ├── TrackEditor.test.tsx     # NEW
+│   ├── ScheduleView.test.tsx    # + parallel stage rendering
+│   ├── GanttView.test.tsx       # + multi-track bars
+│   └── TimerView.test.tsx       # + stage gate; parallel step display
 └── pages/
-    └── TimerPage.test.tsx        # + integration: live session with parallel group
+    └── TimerPage.test.tsx       # + integration: Stage/Track live session
 ```
-
-**Structure Decision**: Single monorepo (existing structure). All changes are additive files or extensions of existing files. No new packages, no new apps. The only genuinely new source file is `group-complete.ts` in `alarm-scheduler` and `CompanionStepForm.tsx` in the PWA.
-
----
-
-## Complexity Tracking
-
-No constitution violations. No complexity justification required.
 
 ---
 
 ## Implementation Phases
 
-### Phase 0 — Foundational (packages/meal-model)
+### Phase 0 — meal-model: New Entities & Validators
 
-Establish the new entity and validators before any other package can consume them.
+1. Add `Track` and `Stage` interfaces to `entities.ts`
+2. Replace `steps: Step[]` with `stages: Stage[]` on `Dish` and `Recipe`
+3. Implement `validateTrack()` and `validateStage()` in `validators.ts`
+4. Update `validateDish()` and `validateRecipe()` to validate `stages`
+5. Implement `upgradeRecord()`, `deserializeDish()`, `deserializeRecipe()` in `deserializers.ts`
+6. Export all new types and functions from `index.ts`
 
-1. Add `CompanionStep` interface to `entities.ts`
-2. Extend `Step` interface with `companions?: readonly CompanionStep[]`
-3. Implement `validateCompanionStep()` in `validators.ts`
-4. Extend `validateStep()` to validate the optional `companions` array
-5. Extend `deserializeStep()` to handle companions (drop invalid, default to [])
-6. Export new types and functions from `index.ts`
+**TDD gate**: Tests for `validateTrack`, `validateStage`, `upgradeRecord` (old format → new), and deserialization round-trips must be written and confirmed failing before implementation.
 
-**TDD gate**: Tests for `validateCompanionStep` and extended `validateStep` must be written and confirmed failing before implementation.
+### Phase 1 — scheduler: Stage/Track Algorithm
 
-### Phase 1 — Scheduler Extension (packages/scheduler)
+1. Add `stageId`, `trackId`, `isConcurrentWithOtherDish` to `StepEvent`; update `isParallel` semantics
+2. Rewrite `scheduleDish` inner loop: outer walk on `stages[]`, inner walk per `track.steps[]`
+3. Capture `stageEndTime` per stage; reverse-time each track from it independently
+4. Set `isParallel = stage.tracks.length > 1` per event
+5. Update `scheduleMealPlan` to set `isConcurrentWithOtherDish` on cross-dish same-startTime events
 
-1. Add `parallelGroupId: string | null` to `StepEvent` in `types.ts`
-2. Update `scheduleDish` to:
-   - Capture `stepEndTime` at each reverse-walk step
-   - Emit companion `StepEvent` objects with `parallelGroupId = anchor.id`
-   - Set `parallelGroupId` on anchor events when companions are present
-3. Update `scheduleMealPlan` if `StepEvent` shape changes require it (likely no logic change, just type propagation)
+**TDD gate**: Tests for chained parallel stages, shared end-time invariant, longer-track scenarios, and cross-dish `isConcurrentWithOtherDish` before implementation.
 
-**TDD gate**: Tests for companion event emission and shared-end-time invariant before implementation.
+### Phase 2 — alarm-scheduler: Stage Gate & Cascade
 
-### Phase 2 — Alarm Scheduler Extension (packages/alarm-scheduler)
+1. Add `stageId` and `trackId` to `LiveStepState`
+2. Update `createLiveSession` to populate them from `StepEvent`
+3. Implement `isStageComplete(session, stageId)` in `group-complete.ts`
+4. Update `applyStepDelay` with CASE 1 (single-track) and CASE 2 (multi-track) rules
 
-1. Add `parallelGroupId: string | null` to `LiveStepState` in `types.ts`
-2. Update `createLiveSession` to populate `parallelGroupId` from `StepEvent`
-3. Implement `isParallelGroupComplete()` in new `group-complete.ts`
-4. Update `applyStepDelay` in `delay.ts` with companion cascade boundary rules (Cases 1/2/3 from contracts)
-5. Export `isParallelGroupComplete` from `index.ts`
+**TDD gate**: Tests for `isStageComplete` (all confirmed, partial, none), and each `applyStepDelay` cascade case before implementation.
 
-**TDD gate**: Tests for each cascade case and group-completion logic before implementation.
+### Phase 3 — PWA: New Editor + Updated Views
 
-### Phase 3 — PWA Extension (apps/pwa)
+1. `TrackEditor` component (new) — step CRUD within a single Track
+2. `StageEditor` component (new) — Stage list with add/remove Track per Stage
+3. Update `MealPlanEditor` and `RecipeEditor` to use `StageEditor` instead of `StepForm`
+4. Update `ScheduleView` — Stage groups with Track sub-rows; `isConcurrentWithOtherDish` badge
+5. Update `GanttView` — Track bars per stage; join lines
+6. Update `TimerView` — Stage-grouped step cards; gate on `isStageComplete`
+7. Update `TimerPage` — inject `isStageComplete` into `TimerView`
 
-1. `CompanionStepForm` component (new) — inline add/edit form for companions
-2. `StepForm` extension — contextual menu (⋮) per step card; companion sub-card rendering
-3. `ScheduleView` extension — group parallel events by `parallelGroupId`; visual accent
-4. `GanttView` extension — companion bars as sub-rows within dish lane
-5. `TimerView` extension — grouped parallel step cards; join step gate via `isParallelGroupComplete`
-6. `TimerPage` — pass `isParallelGroupComplete` helper to `TimerView`
+**TDD gate**: Component tests for each new/updated component before implementation.
 
-**TDD gate**: Component tests written before implementation for each component change.
+### Phase 4 — Polish & Verification
 
-### Phase 4 — Polish & Storage Verification
-
-1. Verify round-trip: save recipe with companions → reload → schedule identical (Quickstart Scenario 4C)
-2. Verify backward compatibility: existing recipes with no companions load without error
-3. Verify `MealPlanRepository` and `RecipeRepository` deserializers call updated `deserializeStep`
-4. Manual smoke test against all 7 Quickstart scenarios
+1. Verify backward compat: old-format records load, display, and schedule correctly
+2. Verify round-trip: save Stage/Track recipe → reload → identical schedule
+3. Manual smoke test against all 8 Quickstart scenarios
+4. Verify `RecipeRepository` and `MealPlanRepository` call new `deserializeDish/Recipe`

@@ -2,29 +2,32 @@
  * @contract scheduler (addendum: 002-do-alongside)
  * Package: @kitchensync/scheduler
  *
- * Additive extension to the scheduler contract from 001-reverse-timing.
- * Introduces parallelGroupId on StepEvent and updates scheduleDish to emit
- * StepEvents for companion steps.
+ * Replaces the 001 scheduleDish algorithm with a Stage/Track-aware version.
+ * StepEvent gains stageId, trackId, and isConcurrentWithOtherDish.
+ * The isParallel field is redefined to mean intra-dish (Stage has > 1 Track).
  *
- * scheduleMealPlan is unchanged (it delegates to scheduleDish per dish).
+ * scheduleMealPlan is unchanged in signature; it delegates to the updated scheduleDish.
  */
 
 import type { WallClockTime } from './timing-engine';
-import type { StepType } from './meal-model';
+import type { StepType, Dish, MealPlan } from './meal-model';
 
 // ─── Extended StepEvent ───────────────────────────────────────────────────────
 
 /**
- * Extended StepEvent with intra-dish parallel group membership.
+ * A computed start-time event for a single step within a schedule.
  *
- * All existing fields are unchanged. One new field is added.
+ * Fields updated from 001-reverse-timing:
+ *   - isParallel: semantics updated (see below)
+ *   - stageId: new — intra-dish parallel group identifier
+ *   - trackId: new — within-stage lane identifier
+ *   - isConcurrentWithOtherDish: new — carries the old isParallel cross-dish meaning
  */
 export interface StepEvent {
   readonly dishId: string;
   readonly dishName: string;
   /**
-   * For backbone (anchor) steps: the step's own id.
-   * For companion steps: the companion's own id (NOT the anchor's id).
+   * The step's own id. Unique within the schedule.
    */
   readonly stepId: string;
   readonly stepName: string;
@@ -32,77 +35,123 @@ export interface StepEvent {
   /**
    * Calculated start time for this step.
    *
-   * For companions: anchorEndTime − companion.durationMinutes.
-   * May be earlier than the anchor's startTime if the companion is longer.
+   * For steps in a multi-track Stage, each track is reverse-timed independently
+   * from the shared stageEndTime. A step in a longer track will start earlier
+   * than a step in a shorter track within the same Stage.
    */
   readonly startTime: WallClockTime;
   /**
-   * True when at least one other StepEvent from a DIFFERENT dish has the same
-   * startTime — unchanged from 001-reverse-timing semantics.
+   * Updated semantics (002-do-alongside):
+   * true when this event's Stage has tracks.length > 1 (intra-dish parallelism).
+   *
+   * Previously (001): true when another event from a DIFFERENT dish shared the
+   * same startTime. That signal is now carried by isConcurrentWithOtherDish.
    */
   readonly isParallel: boolean;
   /**
-   * NEW. The anchor step's id if this event belongs to an intra-dish parallel
-   * group; null otherwise.
-   *
-   * Set on BOTH the anchor step's event AND all companion step events in the
-   * same group. The anchor step's event has parallelGroupId === stepId.
-   *
-   * null for steps with no companions.
+   * NEW. true when at least one event from a DIFFERENT dish has the same
+   * startTime as this event. Carries the 001-reverse-timing meaning of isParallel.
    */
-  readonly parallelGroupId: string | null;
+  readonly isConcurrentWithOtherDish: boolean;
+  /**
+   * NEW. The id of the Stage this step belongs to.
+   *
+   * All events in the same Stage share this id, regardless of which Track they
+   * belong to. Used by the timer UI gate: the first step of Stage[i+1] cannot be
+   * confirmed until all events in Stage[i] are confirmed (isStageComplete check).
+   */
+  readonly stageId: string;
+  /**
+   * NEW. The id of the Track within the Stage this step belongs to.
+   *
+   * Used by the UI to render events in the correct parallel lane (ScheduleView
+   * groups by stageId, then renders separate rows per trackId within a stage).
+   */
+  readonly trackId: string;
 }
 
 // ─── Schedule output ──────────────────────────────────────────────────────────
 
 /**
- * Unchanged from 001-reverse-timing except that events may now include companion
- * StepEvents interleaved in startTime order.
+ * The computed schedule for one Dish or a full MealPlan.
  *
- * Ordering: ascending startTime; ties broken by dishId (stable, deterministic).
- * Within a parallel group, a companion with an earlier startTime appears before
- * the anchor.
- *
- * The shared-end-time invariant holds:
- *   For all events e in a parallel group G:
- *     e.startTime + e.durationMinutes === joinStep.startTime (or targetTime if last)
- *   This is guaranteed by the scheduler, not stored in the Schedule itself.
+ * Events are ordered ascending by startTime, then dishId (stable, deterministic).
+ * Within a multi-track Stage, events from different tracks interleave naturally
+ * by startTime; consumers use stageId + trackId to group them for display.
  */
 export interface Schedule {
   readonly targetTime: WallClockTime;
   readonly events: readonly StepEvent[];
+  /**
+   * Minutes by which the earliest event start time precedes the current time.
+   * The earliest event is the first step of the earliest-starting Track across
+   * all Stages. null if all events start in the future.
+   */
   readonly overrunMinutes: number | null;
 }
 
 // ─── Updated scheduleDish contract ───────────────────────────────────────────
 
 /**
- * Computes a reverse-timing Schedule for a single Dish, including companion steps.
+ * Computes a reverse-timing Schedule for a single Dish using the Stage/Track model.
  *
- * Algorithm addendum for companions:
- *   For each backbone step s at position i (walked in reverse):
- *     stepEndTime = cursor (value before subtracting s.durationMinutes)
- *     cursor -= s.durationMinutes
- *     emit StepEvent(s, startTime=cursor, parallelGroupId = s.companions?.length ? s.id : null)
- *     for each companion c in s.companions:
- *       emit StepEvent(c, startTime = stepEndTime - c.durationMinutes, parallelGroupId = s.id)
+ * Algorithm:
  *
- * Invariants:
- * - The backbone walk is unchanged; companions are additive output per step.
- * - A step with companions.length === 0 (or undefined) emits exactly one event
- *   with parallelGroupId: null — identical to 001-reverse-timing behaviour.
- * - Companions may have startTime earlier than their anchor if their duration
- *   exceeds the anchor's duration. The schedule sorts all events by startTime.
+ *   cursor = targetTime
+ *   for i = stages.length - 1 downto 0:
+ *     stage = stages[i]
+ *     stageEndTime = cursor         // shared end time for all tracks in this stage
  *
- * @param dish - Dish whose steps (and companions) are scheduled.
+ *     trackEarliestStarts = []
+ *     for each track in stage.tracks:
+ *       trackCursor = stageEndTime
+ *       for j = track.steps.length - 1 downto 0:
+ *         step = track.steps[j]
+ *         trackCursor = trackCursor - step.durationMinutes
+ *         emit StepEvent(
+ *           step,
+ *           startTime = trackCursor,
+ *           stageId   = stage.id,
+ *           trackId   = track.id,
+ *           isParallel = stage.tracks.length > 1,
+ *         )
+ *       trackEarliestStarts.push(trackCursor)
+ *
+ *     cursor = min(trackEarliestStarts)  // stage start = earliest track start
+ *
+ *   Sort all events ascending by startTime, then dishId.
+ *   Compute overrunMinutes from earliest event vs. now.
+ *   Set isConcurrentWithOtherDish = false for single-dish schedules.
+ *
+ * Shared-end-time invariant (enforced by algorithm, not stored):
+ *   For every Stage: all its tracks end at stageEndTime.
+ *
+ * @param dish - The Dish to schedule.
  * @param targetTime - The "ready by" wall-clock time.
  * @param now - Current wall-clock time (injected for testability).
- * @returns A fully computed Schedule including companion StepEvents.
+ * @returns A fully computed Schedule.
  */
 export interface ScheduleDish {
-  (
-    dish: import('./meal-model').Dish,
-    targetTime: WallClockTime,
-    now: WallClockTime,
-  ): Schedule;
+  (dish: Dish, targetTime: WallClockTime, now: WallClockTime): Schedule;
+}
+
+/**
+ * Computes a unified Schedule across all Dishes in a MealPlan.
+ *
+ * Delegates to scheduleDish per dish, then merges and re-sorts all events.
+ * Sets isConcurrentWithOtherDish = true on events from different dishes that
+ * share the same startTime (the updated cross-dish signal).
+ *
+ * @param mealPlan - The MealPlan to schedule.
+ * @param now - Current wall-clock time (injected for testability).
+ * @returns A single unified Schedule spanning all dishes.
+ */
+export interface ScheduleMealPlan {
+  (mealPlan: MealPlan, now: WallClockTime): Schedule;
+}
+
+/** The public surface of the @kitchensync/scheduler library. */
+export interface Scheduler {
+  scheduleDish: ScheduleDish;
+  scheduleMealPlan: ScheduleMealPlan;
 }
