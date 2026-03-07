@@ -134,3 +134,10 @@ Do **not** re-research spec-kit or re-read the `.specify/` internals unless some
 
 - `/speckit.specify` creates feature branches like `001-reverse-timing`
 - Push completed feature work to the session's designated `claude/…` branch by merging the feature branch into it before pushing.
+
+## Active Technologies
+- TypeScript 5.x (strict mode) + existing workspace only — pnpm + Turborepo monorepo; React 19, Bootstrap 5, Dexie 4 (IndexedDB), Vitest 2, React Testing Library (002-do-alongside)
+- Dexie.js IndexedDB — companions are nested JSON within existing `steps` column; no schema migration required (002-do-alongside)
+
+## Recent Changes
+- 002-do-alongside: Added TypeScript 5.x (strict mode) + existing workspace only — pnpm + Turborepo monorepo; React 19, Bootstrap 5, Dexie 4 (IndexedDB), Vitest 2, React Testing Library
