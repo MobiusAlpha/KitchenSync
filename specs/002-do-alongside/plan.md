@@ -175,7 +175,7 @@ apps/pwa/tests/
 2. `StageEditor` component (new) — Stage list with add/remove Track per Stage
 3. Update `MealPlanEditor` and `RecipeEditor` to use `StageEditor` instead of `StepForm`
 4. Update `ScheduleView` — Stage groups with Track sub-rows; `isConcurrentWithOtherDish` badge
-5. Update `GanttView` — Track bars per stage; join lines
+5. Create `GanttView` (new component) — Track bars per stage; join lines; integrate into PlannerPage and MealPlanPage
 6. Update `TimerView` — Stage-grouped step cards; gate on `isStageComplete`
 7. Update `TimerPage` — inject `isStageComplete` into `TimerView`
 
