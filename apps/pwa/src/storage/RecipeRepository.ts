@@ -1,4 +1,5 @@
 import type { Recipe } from '@kitchensync/meal-model';
+import { deserializeRecipe } from '@kitchensync/meal-model';
 import { db } from './db.js';
 import { generateId } from '../utils/id.js';
 
@@ -36,11 +37,16 @@ export const RecipeRepository = {
 
   async getAll(): Promise<readonly Recipe[]> {
     const all = await db.recipes.orderBy('updatedAt').reverse().toArray();
-    return all;
+    return all.flatMap(row => {
+      const result = deserializeRecipe(row);
+      return result.ok ? [result.value] : [];
+    });
   },
 
   async getById(id: string): Promise<Recipe | null> {
-    const recipe = await db.recipes.get(id);
-    return recipe ?? null;
+    const row = await db.recipes.get(id);
+    if (!row) return null;
+    const result = deserializeRecipe(row);
+    return result.ok ? result.value : null;
   },
 };

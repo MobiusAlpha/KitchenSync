@@ -1,4 +1,5 @@
 import type { MealPlan, Dish } from '@kitchensync/meal-model';
+import { deserializeMealPlan } from '@kitchensync/meal-model';
 import { db } from './db.js';
 import { generateId } from '../utils/id.js';
 
@@ -54,11 +55,17 @@ export const MealPlanRepository = {
   },
 
   async getAll(): Promise<readonly MealPlan[]> {
-    return db.mealPlans.orderBy('updatedAt').reverse().toArray();
+    const all = await db.mealPlans.orderBy('updatedAt').reverse().toArray();
+    return all.flatMap(row => {
+      const result = deserializeMealPlan(row);
+      return result.ok ? [result.value] : [];
+    });
   },
 
   async getById(id: string): Promise<MealPlan | null> {
-    const plan = await db.mealPlans.get(id);
-    return plan ?? null;
+    const row = await db.mealPlans.get(id);
+    if (!row) return null;
+    const result = deserializeMealPlan(row);
+    return result.ok ? result.value : null;
   },
 };
