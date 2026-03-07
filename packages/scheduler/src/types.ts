@@ -9,6 +9,7 @@ export interface StepEvent {
   readonly stepName: string;
   readonly stepType: StepType;
   readonly startTime: WallClockTime;
+  readonly durationMinutes: number;
   readonly isParallel: boolean;
 }
 

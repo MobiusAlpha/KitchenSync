@@ -19,10 +19,22 @@ export interface StepEvent {
   readonly dishId: string;
   readonly dishName: string;
   readonly stepId: string;
-  readonly stepName: string;
-  readonly stepType: StepType;
+  /**
+   * Display name of the step. Undefined for auto-generated single-block steps
+   * (created when a dish is entered as a total-duration block, FR-001b).
+   */
+  readonly stepName: string | undefined;
+  /**
+   * Step category. Undefined for auto-generated single-block steps.
+   */
+  readonly stepType: StepType | undefined;
   /** Calculated start time for this step. */
   readonly startTime: WallClockTime;
+  /**
+   * Duration of this step in minutes. Required by the Gantt view for
+   * proportional block sizing (FR-012a).
+   */
+  readonly durationMinutes: number;
   /**
    * True when at least one other StepEvent from a DIFFERENT dish has the same
    * startTime — indicating parallel work is required.

@@ -35,6 +35,46 @@ export interface StepFormProps {
   readonly disabled?: boolean;
 }
 
+// ─── BlockExpansion ───────────────────────────────────────────────────────────
+
+/**
+ * Inline panel for expanding a single-block Dish component into named stages (FR-033).
+ *
+ * Shown when the user taps a single-block Gantt lane or its corresponding list entry.
+ * The user enters individual stages; the panel reactively shows the diff between the
+ * running stage sum and the original block estimate (e.g. "+8 min vs. original estimate").
+ * No constraint is enforced — the diff is informational only (FR-033 warn-not-constrain).
+ *
+ * On confirm, `onExpand` is called with the new step list (≥2 steps; each with name + type).
+ * The parent is responsible for clearing `Dish.originalEstimateMinutes` after saving.
+ */
+export interface BlockExpansionProps {
+  /**
+   * Display name of the dish being expanded (shown as the panel title).
+   */
+  readonly dishName: string;
+  /**
+   * The original single-block estimate in minutes. Used to compute the diff label.
+   * Must be > 0.
+   */
+  readonly originalEstimateMinutes: number;
+  /**
+   * Current draft stages being entered (controlled).
+   * Starts empty; the parent initialises to [] when the panel opens.
+   */
+  readonly draftSteps: readonly Step[];
+  /** Called as the user adds, edits, or removes draft stages. */
+  readonly onDraftChange: (steps: readonly Step[]) => void;
+  /**
+   * Called when the user confirms the expansion.
+   * The confirmed steps replace the single-block step in the parent Dish.
+   * Guaranteed to have ≥ 1 step with valid durationMinutes.
+   */
+  readonly onExpand: (steps: readonly Step[]) => void;
+  /** Called when the user cancels the expansion without saving. */
+  readonly onCancel: () => void;
+}
+
 // ─── OverrunWarning ───────────────────────────────────────────────────────────
 
 /**
@@ -48,15 +88,30 @@ export interface OverrunWarningProps {
 
 // ─── ScheduleView ─────────────────────────────────────────────────────────────
 
+/** The two display modes for a computed Schedule (FR-012). */
+export type ScheduleViewMode = 'gantt' | 'list';
+
 /**
  * Read-only display of a computed Schedule.
- * Works for both single-dish (no dish name column) and multi-dish
- * (dish name column + parallel indicator badge) layouts.
+ *
+ * Supports two modes (FR-012):
+ *   - 'gantt' (default): Gantt chart with one horizontal lane per dish;
+ *     steps rendered as proportionally-sized CSS blocks.
+ *   - 'list': Chronological list of step events ordered by start time.
+ *
+ * Works for both single-dish and multi-dish layouts.
  * Renders an empty-state prompt when schedule is null.
  */
 export interface ScheduleViewProps {
   /** The computed schedule to display. null triggers the empty-state prompt. */
   readonly schedule: Schedule | null;
+  /**
+   * Active display mode. Defaults to 'gantt' on first render.
+   * Controlled externally so the parent page can persist the user's preference.
+   */
+  readonly viewMode: ScheduleViewMode;
+  /** Called when the user toggles between 'gantt' and 'list'. */
+  readonly onViewModeChange: (mode: ScheduleViewMode) => void;
 }
 
 // ─── RecipeEditor ─────────────────────────────────────────────────────────────

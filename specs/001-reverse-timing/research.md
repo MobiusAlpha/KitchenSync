@@ -268,6 +268,65 @@ Minimum required icon sizes: 192×192 and 512×512 PNG.**
 
 ---
 
+## 8. Gantt Chart Rendering (FR-012 — Gantt View)
+
+**Decision: Pure CSS positioning (no chart library). Each dish lane is a `position: relative`
+container; step blocks are `position: absolute` children with `left` and `width` calculated
+from start-offset and duration as a percentage of the total visible time window.**
+
+**Rationale:** The scale and data structure are simple (≤20 steps, ≤10 dishes). A pure-CSS
+approach has zero additional dependencies, works offline, renders instantly, and is fully
+accessible (step labels are real DOM text). A library like `react-gantt-task` would add ~50 KB
+and impose data-shaping overhead without significant benefit at this scale.
+
+**Algorithm for positioning a step block:**
+
+```ts
+// windowStart = earliest step startTime across all dishes
+// windowEnd   = targetTime (all dishes end here)
+// totalMinutes = minutesBetween(windowStart, windowEnd)
+
+const leftPct  = (minutesBetween(windowStart, stepStartTime) / totalMinutes) * 100
+const widthPct = (step.durationMinutes / totalMinutes) * 100
+```
+
+**Lane layout:**
+```css
+.gantt-lane {
+  position: relative;
+  height: 48px;         /* one row per dish */
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+.gantt-block {
+  position: absolute;
+  top: 4px;
+  height: 40px;
+  min-width: 4px;       /* always visible even for very short steps */
+  border-radius: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+}
+```
+
+**Time-axis header:** A shared `position: relative` ruler above all lanes with tick marks at
+regular intervals (every 15 or 30 min depending on zoom). Generated from the same
+`windowStart`/`totalMinutes` parameters so blocks align with ticks.
+
+**Single-block vs staged dishes:** A dish with a single auto-generated step renders as one
+full-width block spanning the entire lane. A staged dish renders multiple adjacent blocks. The
+visual distinction is immediate — no special-case rendering code needed.
+
+**Block expansion diff display (FR-033):** When the user taps a single block to expand it into
+stages, the expansion panel shows the original block duration alongside the running sum of the
+entered stages. The diff label (`+N min` / `−N min`) is computed reactively as stages are
+entered. Only the `originalEstimateMinutes` value (stored on `Dish`) is needed; no extra state.
+
+---
+
 ## Summary Decision Table
 
 | Area | Decision |
@@ -281,3 +340,4 @@ Minimum required icon sizes: 192×192 and 512×512 PNG.**
 | Display mode | `standalone` |
 | Icon strategy | Separate `any` and `maskable` entries; 192 + 512 minimum |
 | tsconfig | Three-file split, `"moduleResolution": "bundler"`, strict |
+| Gantt chart rendering | Pure CSS positioning; no chart library |

@@ -17,4 +17,6 @@ export {
   validateRecipe,
   validateMealPlan,
   validateWallClockTime,
+  deserializeRecipe,
+  deserializeMealPlan,
 } from './validators.js';

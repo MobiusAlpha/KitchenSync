@@ -20,13 +20,26 @@ export type StepType = 'prep' | 'cook' | 'rest' | 'cooldown';
 
 // ─── Core entities ───────────────────────────────────────────────────────────
 
-/** A single timed action within a recipe or ad-hoc timing session. */
+/**
+ * A single timed action within a recipe or ad-hoc timing session.
+ *
+ * `name` and `type` are optional to support single-block component entry (FR-001b):
+ * when a dish is added as a total-duration block, one Step is auto-generated with only
+ * `durationMinutes` set. Both fields are required when steps are entered individually.
+ */
 export interface Step {
   /** UUID v4. Immutable after creation. */
   readonly id: string;
-  /** 1–80 characters. Must not be blank. */
-  readonly name: string;
-  readonly type: StepType;
+  /**
+   * 1–80 characters. Must not be blank when provided.
+   * Omitted for auto-generated single-block steps.
+   */
+  readonly name?: string;
+  /**
+   * Step category. Omitted for auto-generated single-block steps.
+   * Required when steps are entered individually.
+   */
+  readonly type?: StepType;
   /** Positive whole number of minutes (1–1440). */
   readonly durationMinutes: number;
 }
@@ -63,6 +76,13 @@ export interface Dish {
   readonly sourceRecipeId: string | null;
   /** Snapshot copy of steps. Changes to the source Recipe do NOT propagate here. */
   readonly steps: readonly Step[];
+  /**
+   * The duration of the original single-block entry, in minutes (FR-033).
+   * Set when a dish is created from a total-duration block; used to compute the
+   * expansion diff label (e.g. "+8 min vs. original estimate") during inline expansion.
+   * Undefined once the dish has been expanded into explicit stages and saved.
+   */
+  readonly originalEstimateMinutes?: number;
 }
 
 /** A collection of Dishes sharing a single target "ready by" time. */

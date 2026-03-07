@@ -1,7 +1,7 @@
 # Data Model: Reverse-Timing Cooking Scheduler
 
 **Feature**: `001-reverse-timing` | **Date**: 2026-02-25
-**Derived from**: `spec.md` (FR-001–FR-032), `plan.md` Technical Context
+**Derived from**: `spec.md` (FR-001–FR-033), `plan.md` Technical Context
 
 ---
 
@@ -47,13 +47,14 @@ The atomic unit of a recipe or ad-hoc timing session.
 | Field       | Type                                           | Constraints |
 |-------------|------------------------------------------------|-------------|
 | `id`        | `string` (UUID v4)                             | Required, immutable after creation |
-| `name`      | `string`                                       | Required; 1–80 characters |
-| `type`      | `'prep' \| 'cook' \| 'rest' \| 'cooldown'`    | Required; closed enum |
+| `name`      | `string \| undefined`                          | Optional for auto-generated single-block steps; required (1–80 chars) when entered individually |
+| `type`      | `'prep' \| 'cook' \| 'rest' \| 'cooldown' \| undefined` | Optional for single-block steps; required when steps are entered individually |
 | `durationMinutes` | `number`                               | Required; integer; ≥ 1; ≤ 1440 (24 h) |
 
 **Validation rules**:
-- `name` must not be blank or whitespace-only
-- `durationMinutes` must be a positive whole number (FR-002: "positive whole number of minutes")
+- `durationMinutes` must be a positive whole number (FR-002)
+- `name` is required and must not be blank/whitespace-only when entered individually (i.e. `type` is also provided); optional when auto-generated from a single-block component entry
+- `type` is required when steps are entered individually; omitted for auto-generated single-block steps
 - Zero-duration steps are rejected (edge case, spec §Edge Cases)
 
 ---
@@ -110,12 +111,13 @@ steps, not a live reference — changes to the source Recipe after the Dish is c
 automatically propagate (spec §Edge Cases: "Changes in the session MUST NOT automatically
 overwrite the saved recipe").
 
-| Field           | Type                  | Constraints |
-|-----------------|-----------------------|-------------|
-| `id`            | `string` (UUID v4)    | Required, immutable |
-| `displayName`   | `string`              | Required; 1–100 chars; must be unique within the MealPlan (auto-suffix if duplicate) |
-| `sourceRecipeId`| `string \| null`      | UUID of the Recipe this was loaded from; `null` for ad-hoc dishes |
-| `steps`         | `Step[]`              | Required; ordered; ≥ 1 step; snapshot copy |
+| Field                   | Type                  | Constraints |
+|-------------------------|-----------------------|-------------|
+| `id`                    | `string` (UUID v4)    | Required, immutable |
+| `displayName`           | `string`              | Required; 1–100 chars; must be unique within the MealPlan (auto-suffix if duplicate) |
+| `sourceRecipeId`        | `string \| null`      | UUID of the Recipe this was loaded from; `null` for ad-hoc dishes |
+| `steps`                 | `Step[]`              | Required; ordered; ≥ 1 step; snapshot copy |
+| `originalEstimateMinutes` | `number \| undefined` | Set when dish is created from a single-block entry; equals the auto-generated step's `durationMinutes`. Used to compute the expansion diff display (FR-033). Cleared (set to `undefined`) once the dish has been expanded and saved. |
 
 ---
 
@@ -132,15 +134,16 @@ Recalculated on every relevant input change (FR-014).
 
 #### StepEvent
 
-| Field        | Type             | Constraints |
-|--------------|------------------|-------------|
-| `dishId`     | `string`         | UUID of the parent Dish |
-| `dishName`   | `string`         | Display name of the parent Dish |
-| `stepId`     | `string`         | UUID of the Step |
-| `stepName`   | `string`         | Display name of the Step |
-| `stepType`   | `Step['type']`   | Copied from Step |
-| `startTime`  | `WallClockTime`  | Calculated start time for this step |
-| `isParallel` | `boolean`        | `true` if another StepEvent from a different dish starts at the same `startTime` |
+| Field             | Type                    | Constraints |
+|-------------------|-------------------------|-------------|
+| `dishId`          | `string`                | UUID of the parent Dish |
+| `dishName`        | `string`                | Display name of the parent Dish |
+| `stepId`          | `string`                | UUID of the Step |
+| `stepName`        | `string \| undefined`   | Display name of the Step; `undefined` for auto-generated single-block steps |
+| `stepType`        | `Step['type'] \| undefined` | Copied from Step; `undefined` for single-block steps |
+| `startTime`       | `WallClockTime`         | Calculated start time for this step |
+| `durationMinutes` | `number`                | Duration of this step in minutes. Required by Gantt view for proportional block sizing (FR-012). |
+| `isParallel`      | `boolean`               | `true` if another StepEvent from a different dish starts at the same `startTime` |
 
 **Scheduling algorithm** (from FR-011):
 ```
@@ -286,7 +289,7 @@ pending ──(scheduleStart arrives, alarm fires)──► [alarm displayed]
 
 | Entity         | Boundary             | Validator location |
 |----------------|----------------------|--------------------|
-| Step           | Form submit          | `meal-model` library — `validateStep()` |
+| Step           | Form submit          | `meal-model` library — `validateStep()` (name/type required only when entered individually) |
 | Recipe         | Save action          | `meal-model` library — `validateRecipe()` |
 | MealPlan       | Save / schedule      | `meal-model` library — `validateMealPlan()` |
 | WallClockTime  | Target time input    | `meal-model` library — `validateWallClockTime()` |

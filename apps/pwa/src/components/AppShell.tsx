@@ -26,7 +26,7 @@ export function AppShell({ children }: AppShellProps) {
         </Container>
       </Navbar>
 
-      <main style={{ paddingTop: '4rem', paddingBottom: '4rem' }}>
+      <main style={{ paddingTop: 'calc(4rem + env(safe-area-inset-top))', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
         <Container>{children}</Container>
       </main>
 

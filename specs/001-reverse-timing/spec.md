@@ -19,6 +19,14 @@ individual dishes, and can be timed together."
 - Q: Step-level delay cascade? → A: Cascade — delaying a step shifts all subsequent unstarted steps in the same dish by the same amount. After any delay, the app displays the updated effective meal completion time.
 - Q: Alarm default state? → A: A global app setting controls the default (ships as "all on"). The cook can override at the meal level, then at the dish level, then toggle individual steps. Each level inherits from its parent unless explicitly overridden.
 
+### Session 2026-03-06
+
+- Q: Should the app support adding a component as a single total-duration block (no named stages)? → A: Yes — single-block entry is supported (name + total duration only). Internally this auto-creates a single unnamed/default step; no distinct UI mode is exposed. The same entry flow handles both single-block and staged components.
+- Q: Does "component" map to dish only, or can a single dish contain parallel sub-components? → A: Component = Dish only. Parallelism exists only between dishes; steps within a single dish are always strictly sequential.
+- Q: What should the primary schedule view be? → A: Both views available. Default is a Gantt-chart view with each dish as a continuous horizontal lane and its steps shown as blocks within that lane. A chronological list view is also available and user-switchable.
+- Q: Can a single-block component be expanded into named stages inline during a session (without returning to the recipe editor)? → A: Yes — a single-block component can be expanded into named stages directly within the scheduling session. The schedule recalculates immediately when stages are added.
+- Q: When expanding a single-block into stages, must stage durations sum to the original block duration? → A: No constraint — stages replace the block duration freely. The app shows a diff (over/under vs. original block) so the cook is aware of the change, but does not prevent it.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Single-Dish Reverse Schedule (Priority: P1)
@@ -184,10 +192,12 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 #### Recipe Management
 
-- **FR-001**: Users MUST be able to create a recipe with a name and an ordered list of one or more
-  named steps.
-- **FR-002**: Each step MUST have a name, a step type (one of: Prep, Cook, Rest, Cooldown), and a
-  duration expressed as a positive whole number of minutes.
+- **FR-001**: Users MUST be able to create a recipe with a name and either (a) an ordered list of
+  one or more named steps, or (b) a single total-duration block (name + duration only, no explicit
+  step decomposition). Option (b) is stored internally as a single auto-generated step.
+- **FR-002**: Each step MUST have a duration expressed as a positive whole number of minutes. Step
+  name and step type (one of: Prep, Cook, Rest, Cooldown) are optional when a component is entered
+  as a single total-duration block; they are required when steps are entered individually.
 - **FR-003**: Users MUST be able to save a recipe for future use.
 - **FR-004**: Users MUST be able to view, edit (name, steps, durations, order), and delete any
   saved recipe.
@@ -196,10 +206,11 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 #### Ad-hoc Timing
 
-- **FR-007**: Users MUST be able to start a timing session by entering steps directly, without
-  creating or selecting a saved recipe.
-- **FR-008**: Ad-hoc steps MUST support the same step types and duration configuration as steps
-  within a saved recipe.
+- **FR-007**: Users MUST be able to start a timing session by entering a component directly — either
+  as a single total-duration block or as a series of named steps — without creating or selecting a
+  saved recipe.
+- **FR-008**: Ad-hoc components MUST support both entry forms: single total-duration block and
+  individual named steps with optional types, matching the same options available in saved recipes.
 - **FR-009**: Users MUST be able to save an ad-hoc set of steps as a named recipe at any point
   during or after the session.
 
@@ -209,13 +220,24 @@ and that confirming start dismisses the alarm and marks the step as started.
   or meal plan.
 - **FR-011**: The system MUST calculate each step's start time by subtracting cumulative step
   durations from the target time in reverse step order.
-- **FR-012**: The system MUST display the calculated schedule as an ordered list of step events,
-  each showing: dish name, step name, step type, and start time.
+- **FR-012**: The system MUST display the calculated schedule in two views, both always available
+  and user-switchable:
+  (a) **Gantt view** (default): each dish occupies a continuous horizontal lane; steps are rendered
+  as labelled blocks within that lane, positioned and sized proportionally to their start time and
+  duration. This is the default view shown on schedule generation.
+  (b) **Chronological list view**: an ordered list of step events, each showing dish name, step
+  name, step type, and start time.
 - **FR-013**: If the earliest calculated start time is in the past, the system MUST display a
   prominent warning showing the overrun amount and preventing the cook from missing preparation
   windows silently.
 - **FR-014**: Any change to a step duration or to the target time MUST trigger immediate
   recalculation of the schedule.
+- **FR-033**: During a scheduling session, users MUST be able to expand a single-block component
+  (auto-generated single step) into multiple named stages inline, without returning to the recipe
+  editor. The schedule MUST recalculate immediately when stages are added or modified. Stage
+  durations are not constrained to sum to the original block duration; the app MUST display a
+  diff (e.g. "+8 min vs. original estimate") when the sum differs, but MUST NOT prevent the
+  change.
 
 #### Meal Planning
 
@@ -223,8 +245,8 @@ and that confirming start dismisses the alarm and marks the step as started.
 - **FR-016**: Each dish in a meal plan MUST be sourced from either a saved recipe or an ad-hoc set
   of steps entered inline.
 - **FR-017**: A meal plan MUST apply a single shared target "ready by" time to all dishes.
-- **FR-018**: The system MUST generate a unified, chronologically-ordered schedule across all dishes
-  in a meal plan.
+- **FR-018**: The system MUST generate a unified schedule across all dishes in a meal plan,
+  displayed in both Gantt view (default) and chronological list view per FR-012.
 - **FR-019**: Steps from different dishes scheduled at overlapping times MUST both appear in the
   schedule with a clear indication that they run in parallel.
 - **FR-020**: Users MUST be able to add or remove dishes from a meal plan, with the schedule
@@ -272,14 +294,16 @@ and that confirming start dismisses the alarm and marks the step as started.
 
 - **Recipe**: A named, reusable collection of ordered Steps. Attributes: name, optional description,
   ordered list of Steps, creation date, last-modified date.
-- **Step**: A single timed action within a Recipe or ad-hoc session. Attributes: name, type
-  (Prep / Cook / Rest / Cooldown), duration in whole minutes.
+- **Step**: A single timed action within a Recipe or ad-hoc session. Attributes: duration in whole
+  minutes (required); name and type (Prep / Cook / Rest / Cooldown) are optional. When a component
+  is entered as a single total-duration block, one Step is auto-generated with no name/type.
 - **Meal Plan**: A collection of Dishes sharing a single target time. Attributes: name, target
   "ready by" time, ordered list of Dishes.
 - **Dish**: An entry in a Meal Plan representing one recipe's worth of steps. Sourced from a saved
   Recipe or defined inline as ad-hoc Steps. Attributes: display name, step list.
-- **Schedule**: The computed output for a Dish or Meal Plan. Contains a chronologically-ordered list
-  of Step Events, each with: dish name, step name, step type, and calculated start time.
+- **Schedule**: The computed output for a Dish or Meal Plan. Contains a set of Step Events, each
+  with: dish name, step name, step type, calculated start time, and duration. Rendered in Gantt
+  view (default, one lane per dish) or chronological list view, switchable by the user.
 
 ## Success Criteria *(mandatory)*
 

@@ -30,6 +30,7 @@ export function scheduleDish(
       stepName: step.name,
       stepType: step.type,
       startTime: cursor,
+      durationMinutes: step.durationMinutes,
       isParallel: false, // Single-dish: no parallel steps
     });
   }
