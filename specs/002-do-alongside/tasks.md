@@ -39,10 +39,12 @@ types. **No user story work may begin until this phase is complete.**
 - [ ] T006 [P] Write failing tests for `upgradeRecord` — old `steps: Step[]` record converts to `stages: Stage[]` with one single-track Stage per old Step in `packages/meal-model/tests/deserializers.test.ts`
 - [ ] T007 [P] Write failing tests for `deserializeDish` — new-format round-trip, old-format auto-upgrade, fatally invalid returns null in `packages/meal-model/tests/deserializers.test.ts`
 - [ ] T008 [P] Write failing tests for `deserializeRecipe` — mirrors deserializeDish contract in `packages/meal-model/tests/deserializers.test.ts`
+- [ ] T008a [P] Write failing tests for `deserializeDish` null-return when no valid Stages survive after dropping invalid elements in `packages/meal-model/tests/deserializers.test.ts`
 
 ### Implementation
 
 - [ ] T009 Add `Track` and `Stage` interfaces to `packages/meal-model/src/entities.ts`; replace `steps: readonly Step[]` with `stages: readonly Stage[]` on both `Dish` and `Recipe`
+- [ ] T009a [P] Migrate existing `validateDish` / `validateRecipe` test fixtures from `steps: Step[]` to `stages: Stage[]` in `packages/meal-model/tests/validators.test.ts` — constitutes a governance event per §II (owner-approved via feature direction)
 - [ ] T010 Implement `validateTrack()` in `packages/meal-model/src/validators.ts` — validates id, non-empty steps array (1–50), each step passes existing `validateStep`; all step ids unique within track
 - [ ] T011 Implement `validateStage()` in `packages/meal-model/src/validators.ts` — validates id, non-empty tracks array (1–10), each track passes `validateTrack`
 - [ ] T012 Update `validateDish()` in `packages/meal-model/src/validators.ts` — validate `stages` field (1–20 Stages) instead of `steps`; error paths `stages[i].tracks[j].steps[k].field`
@@ -51,7 +53,7 @@ types. **No user story work may begin until this phase is complete.**
 - [ ] T015 Implement `deserializeDish()` in `packages/meal-model/src/deserializers.ts` — calls `upgradeRecord`, runs `validateDish`, drops invalid nested elements with `console.warn`, returns `Dish | null`
 - [ ] T016 Implement `deserializeRecipe()` in `packages/meal-model/src/deserializers.ts` — mirrors `deserializeDish` for `Recipe`
 - [ ] T017 Export `Track`, `Stage`, `validateTrack`, `validateStage`, `upgradeRecord`, `deserializeDish`, `deserializeRecipe` from `packages/meal-model/src/index.ts`
-- [ ] T018 Confirm all T002–T008 tests now pass; confirm existing validator tests still pass
+- [ ] T018 Confirm all T002–T009a tests in `packages/meal-model` now pass (new validator/deserializer tests green; migrated fixtures green); note that downstream packages have TypeScript errors until their Phase 3/5 source updates land
 
 **Checkpoint**: `@kitchensync/meal-model` exports Stage/Track entities and all validators/deserializers. All tests green. Downstream packages can now be updated.
 
@@ -78,19 +80,27 @@ starts 15:15, PrepVegetables starts 15:50, MakeStock starts 16:00, both Stage-1 
 - [ ] T023 [P] Write failing tests for `StageEditor`: renders stages, "Add Track" creates new Track in Stage, track count shown, stage order preserved in `apps/pwa/tests/components/StageEditor.test.tsx`
 - [ ] T024 [P] Write failing tests for `TrackEditor`: renders steps in a Track, add step opens inline form, reorder steps, steps validated before save in `apps/pwa/tests/components/TrackEditor.test.tsx`
 - [ ] T025 [P] Write failing tests for `ScheduleView` parallel Stage grouping: multi-track Stage events render under a shared group accent; single-track Stage events render as plain rows; `isConcurrentWithOtherDish` badge visible in `apps/pwa/tests/components/ScheduleView.test.tsx`
+- [ ] T025a [P] Write failing tests for `GanttView`: single-track Stage renders as one bar; multi-track Stage renders stacked Track bars sharing right edge; Stage join-line renders at each Stage boundary in `apps/pwa/tests/components/GanttView.test.tsx`
+- [ ] T025b [P] Write failing test for `scheduleDish` with a single two-track Stage dish (FR-010: join point is `targetTime` — no subsequent Stage exists) in `packages/scheduler/tests/schedule-dish.test.ts`
+- [ ] T025c [P] Write failing test for `scheduleDish` with a single Stage containing three Tracks (FR-004: fan-in of 3 at one join point) in `packages/scheduler/tests/schedule-dish.test.ts`
+- [ ] T025d [P] Write failing tests for `scheduleDish` edge cases: (a) companion Track with `durationMinutes = 0`; (b) companion Track duration exceeding available time before `targetTime` (results in negative start time) in `packages/scheduler/tests/schedule-dish.test.ts`
 
 ### Implementation for User Story 1
 
 - [ ] T026 [P] Add `stageId: string`, `trackId: string`, `isConcurrentWithOtherDish: boolean` to `StepEvent`; update `isParallel` to mean `stage.tracks.length > 1` in `packages/scheduler/src/types.ts`
 - [ ] T027 Rewrite `scheduleDish` inner loop: outer reverse-walk on `stages[]`; per-stage, capture `stageEndTime = cursor`; per-track, reverse-walk `track.steps[]` independently from `stageEndTime`; set `stageId`, `trackId`, `isParallel = stage.tracks.length > 1`; advance `cursor = min(trackStarts)` in `packages/scheduler/src/schedule-dish.ts`
+- [ ] T027a [P] Migrate existing `scheduleDish` and `scheduleMealPlan` test fixtures from `Dish.steps[]` to `Dish.stages[]` in `packages/scheduler/tests/schedule-dish.test.ts` and `packages/scheduler/tests/schedule-meal-plan.test.ts` — governance event per §II (owner-approved)
 - [ ] T028 Update `scheduleMealPlan` to set `isConcurrentWithOtherDish: true` on events from different dishes sharing the same `startTime` in `packages/scheduler/src/schedule-meal-plan.ts`
 - [ ] T029 Create `TrackEditor` component — renders and edits `Step[]` within one Track; wraps existing step add/edit/delete/reorder logic; `props: { track: Track; onChange: (t: Track) => void; disabled?: boolean }` in `apps/pwa/src/components/TrackEditor.tsx`
+- [ ] T029a [P] Retain `StepForm.tsx` as the inline step-entry form used internally by `TrackEditor` (not a standalone top-level editor); update `apps/pwa/tests/components/StepForm.test.tsx` to reflect its narrowed scope as a form sub-component within TrackEditor — governance event per §II
 - [ ] T030 Create `StageEditor` component — renders `Stage[]` as vertical list; each Stage shows its Tracks in columns; single-track Stage shows "Do Alongside" button; multi-track Stage shows per-track "Remove Track" (×); "Add Stage" appends a new sequential Stage; `props: { stages: Stage[]; onChange: (s: Stage[]) => void; disabled?: boolean }` in `apps/pwa/src/components/StageEditor.tsx`
 - [ ] T031 Update `RecipeEditor` to use `StageEditor` instead of `StepForm` in `apps/pwa/src/components/RecipeEditor.tsx`
 - [ ] T032 Update `MealPlanEditor` to use `StageEditor` instead of `StepForm` in `apps/pwa/src/components/MealPlanEditor.tsx`
-- [ ] T033 Update `ScheduleView` to group events by `stageId`; render multi-track Stage groups with a left-border accent and a per-Track sub-row identified by `trackId`; replace old `isParallel` badge with `isConcurrentWithOtherDish` badge labelled "⇔ concurrent" in `apps/pwa/src/components/ScheduleView.tsx`
+- [ ] T033 Update `ScheduleView` to group events by `stageId`; render multi-track Stage groups with a left-border accent and per-Track sub-rows identified by `trackId` (driven by `isParallel`); add `isConcurrentWithOtherDish` badge labelled "⇔ concurrent" (replaces old cross-dish badge; the intra-dish Stage grouping is a new visual layer, not a replacement) in `apps/pwa/src/components/ScheduleView.tsx`
+- [ ] T031a [P] Migrate test fixtures in `apps/pwa/tests/components/ScheduleView.multi-dish.test.tsx`, `apps/pwa/tests/components/MealPlanEditor.test.tsx`, `apps/pwa/tests/components/RecipeEditor.test.tsx`, `apps/pwa/tests/pages/MealPlanPage.test.tsx`, `apps/pwa/tests/pages/RecipesPage.test.tsx` from `Dish.steps[]`/`Recipe.steps[]` and old `isParallel` (cross-dish) semantics to the Stage/Track schema — governance event per §II
 - [ ] T034 Create `GanttView` directory and component `apps/pwa/src/components/GanttView/GanttView.tsx` — horizontal timeline; one Dish row; per-Stage band; single-track Stages: one bar; multi-track Stages: stacked Track bars sharing right edge; bars colour-coded by dominant step type; vertical join lines at Stage boundaries
-- [ ] T035 Confirm all T019–T025 tests now pass
+- [ ] T034a [P] Integrate `GanttView` into `PlannerPage` below `ScheduleView` and into `MealPlanPage` in `apps/pwa/src/pages/PlannerPage.tsx` and `apps/pwa/src/pages/MealPlanPage.tsx`
+- [ ] T035 Confirm all T019–T025d and T031a tests now pass
 
 **Checkpoint**: A dish with multi-track Stages schedules correctly. StageEditor and TrackEditor are usable in recipe and planner flows. ScheduleView groups parallel Stages. GanttView renders Track bars.
 
@@ -149,18 +159,20 @@ shifts only PrepVeg; BrineChicken and MakeStock are unchanged.
 - [ ] T049 [P] Write failing tests for `applyStepDelay` CASE 2 (multi-track Stage): delay target step only; do NOT cascade to sibling Track steps; do NOT cascade to subsequent Stages; emit UPDATE_DISPLAY in `packages/alarm-scheduler/tests/delay-cascade.test.ts`
 - [ ] T050 [P] Write failing tests for `TimerView` parallel Stage rendering: multi-track Stage steps appear simultaneously; each has individual "Mark Started" button; grouped under "Running in parallel" header in `apps/pwa/tests/components/TimerView.test.tsx`
 - [ ] T051 [P] Write failing tests for `TimerView` Stage gate: join step "Mark Started" button is `disabled` while `isStageComplete` returns false; becomes enabled once all Stage members confirmed; "Waiting for parallel steps to complete" label visible while gated in `apps/pwa/tests/components/TimerView.test.tsx`
+- [ ] T051a [P] Write failing integration test for `TimerPage`: session with multi-track Stage wires `isStageComplete` gate to `TimerView`; join step activates after all preceding Stage steps are confirmed in `apps/pwa/tests/pages/TimerPage.test.tsx`
 
 ### Implementation for User Story 3
 
 - [ ] T052 [P] Add `stageId: string` and `trackId: string` to `LiveStepState` in `packages/alarm-scheduler/src/types.ts`
 - [ ] T053 Update `createLiveSession` to populate `stageId` and `trackId` on each `LiveStepState` from the matching `StepEvent` in `packages/alarm-scheduler/src/live-session.ts`
+- [ ] T053a [P] Migrate existing `createLiveSession` and `applyStepDelay` test fixtures to use `LiveStepState` with `stageId`/`trackId` in `packages/alarm-scheduler/tests/live-session.test.ts` and `packages/alarm-scheduler/tests/delay-cascade.test.ts` — governance event per §II
 - [ ] T054 Create `packages/alarm-scheduler/src/group-complete.ts` — export `isStageComplete(session, stageId): boolean`; returns true if every `LiveStepState` with that `stageId` has `confirmedAt !== null`; returns true for unknown stageId (degenerate/safe default)
 - [ ] T055 Update `applyStepDelay` in `packages/alarm-scheduler/src/delay.ts` with CASE 1 (single-track: cascade within Track and through subsequent sequential Stages) and CASE 2 (multi-track: shift target step only; no cross-track or cross-stage cascade)
 - [ ] T056 Export `isStageComplete` from `packages/alarm-scheduler/src/index.ts`
 - [ ] T057 Update `TimerView` to group `session.stepStates` by `stageId`; render single-track Stage groups as before; render multi-track Stage groups under a "Running in parallel" card header with per-step sub-cards and individual timers; inject `isStageComplete` prop in `apps/pwa/src/components/TimerView.tsx`
 - [ ] T058 Gate each join step's "Mark Started" button in `TimerView`: identify the stageId of the preceding Stage; render button as `disabled` with label "Waiting for parallel steps to complete" while `!isStageComplete(session, precedingStageId)` in `apps/pwa/src/components/TimerView.tsx`
 - [ ] T059 Update `TimerPage` to import `isStageComplete` and pass it as a prop to `TimerView` in `apps/pwa/src/pages/TimerPage.tsx`
-- [ ] T060 Confirm all T046–T051 tests now pass
+- [ ] T060 Confirm all T046–T053a tests now pass
 
 **Checkpoint**: All three user stories are independently functional and tested. Timer correctly gates join steps and isolates delay cascades.
 
@@ -178,6 +190,9 @@ shifts only PrepVeg; BrineChicken and MakeStock are unchanged.
 - [ ] T066 [P] Write failing integration test for round-trip: save a Recipe with multi-track Stages → reload → `deserializeRecipe` returns identical structure → schedule output byte-for-byte identical to pre-save in `apps/pwa/tests/storage/RecipeRepository.test.ts`
 - [ ] T067 [P] Write failing integration test: backward compat — seed IndexedDB with old-format `steps[]` Dish → load via MealPlanRepository → schedule matches what `scheduleDish` would produce for equivalent sequential stages in `apps/pwa/tests/storage/MealPlanRepository.test.ts`
 - [ ] T068 Confirm T066–T067 tests pass
+- [ ] T069a [P] Update `packages/scheduler/tests/scheduler.bench.ts` with a multi-track Stage benchmark (Scenario 3 dish profile); confirm runtime is within the same order of magnitude as an equivalent sequential-only dish (SC-002)
+- [ ] T069b Verify the "Do Alongside" gesture achieves SC-001 (≤3 taps from existing Stage to new Track saved) against the live StageEditor interaction flow; document verified tap count and user path in `specs/002-do-alongside/quickstart.md`
+- [ ] T069c [P] Audit JSDoc on all new/modified public interfaces in `packages/meal-model/src`, `packages/scheduler/src`, `packages/alarm-scheduler/src`; add any missing doc comments per constitution §IV
 - [ ] T069 Manually walk Quickstart Scenarios 1–8 and record results; fix any failures before closing the feature
 
 ---
@@ -207,16 +222,20 @@ shifts only PrepVeg; BrineChicken and MakeStock are unchanged.
 - T017 and T018 both depend on T009–T016
 
 **Phase 3** (after Phase 2):
-- T019–T025 (test writing): all parallel
+- T019–T025d (test writing): all parallel
 - T026, T027 sequential (T026 type changes must precede T027 algorithm)
-- T028 parallel with T027 (different file)
+- T027a parallel with T028 (different files; migrates scheduler test fixtures after T027 rewrites scheduleDish)
 - T029, T030 parallel (different files)
+- T029a parallel with T030 (different file — StepForm narrowing)
 - T031, T032 parallel after T030 (different files, both consume StageEditor)
+- T031a parallel with T033, T034, T034a (different test files — fixture migration)
 - T033, T034 parallel (different files)
+- T034a parallel with T033 (different files — GanttView page integration)
 
 **Phase 5** (after Phase 3):
-- T046–T051 (test writing): all parallel
+- T046–T051a (test writing): all parallel
 - T052, T053 sequential (T052 type changes first)
+- T053a parallel with T054, T055, T056 (different files — alarm-scheduler test fixture migration)
 - T054, T055, T056 parallel after T052 (different files)
 - T057, T058 sequential (same file, T057 first)
 - T059 parallel with T057 (different file)
@@ -277,18 +296,18 @@ T034: GanttView component
 
 ## Format Validation
 
-All 69 tasks follow the checklist format: `- [ ] T### [P?] [US?] Description with file path`
+All tasks follow the checklist format: `- [ ] T### [P?] [US?] Description with file path`
 
-| Phase | Task Range | Count |
-|-------|-----------|-------|
+| Phase | Tasks | Count |
+|-------|-------|-------|
 | Setup | T001 | 1 |
-| Foundational | T002–T018 | 17 |
-| US1 | T019–T035 | 17 |
+| Foundational | T002–T018 (+ T008a, T009a) | 19 |
+| US1 | T019–T035 (+ T025a–d, T027a, T029a, T031a, T034a) | 26 |
 | US2 | T036–T045 | 10 |
-| US3 | T046–T060 | 15 |
-| Polish | T061–T069 | 9 |
-| **Total** | | **69** |
+| US3 | T046–T060 (+ T051a, T053a) | 17 |
+| Polish | T061–T069 (+ T069a–c) | 12 |
+| **Total** | | **85** |
 
-**Parallel opportunities**: 38 tasks marked `[P]`
-**TDD pairs**: Every implementation phase is preceded by failing-test tasks
+**Parallel opportunities**: 53 tasks marked `[P]`
+**TDD pairs**: Every implementation phase is preceded by failing-test tasks; test migration tasks (T009a, T027a, T031a, T053a) are governance events approved by project owner direction
 **Independent test criteria**: Each User Story phase includes a self-contained Independent Test scenario drawn from quickstart.md

@@ -9,7 +9,7 @@
 
 ### User Story 1 — Add a Parallel Step to an Existing Dish (Priority: P1)
 
-A user building a chicken noodle soup recipe wants to brine the chicken for 45 minutes, but also prep vegetables during the final 10 minutes of the brine. They tap the "Brine chicken" step, select "Do Alongside", and enter "Prep vegetables – 10 min". The schedule now shows both steps ending at the same moment, with the cook step beginning immediately after both complete.
+A user building a chicken noodle soup recipe wants to brine the chicken for 45 minutes, but also prep vegetables during the final 10 minutes of the brine. They tap the "Do Alongside" button on the "Brine chicken" step group, and enter "Prep vegetables – 10 min" as a new parallel step. The schedule now shows both steps ending at the same moment, with the cook step beginning immediately after both complete.
 
 **Why this priority**: This is the core value proposition of the feature. Without the ability to create a parallel step, nothing else in this feature exists. All other stories depend on it.
 
@@ -17,7 +17,7 @@ A user building a chicken noodle soup recipe wants to brine the chicken for 45 m
 
 **Acceptance Scenarios**:
 
-1. **Given** a dish with at least two sequential steps, **When** the user taps any step card and selects "Do Alongside", **Then** a new step entry form opens pre-associated with that anchor step.
+1. **Given** a dish with at least one step, **When** the user taps the "Do Alongside" button on a step group, **Then** a new step entry form opens pre-associated with that step group, ready to accept a name and duration for the parallel step.
 2. **Given** a new parallel step has been given a name and duration, **When** the user saves it, **Then** the schedule recalculates so that the parallel step ends at the same time as its anchor step.
 3. **Given** a parallel step whose duration exceeds its anchor step's duration, **When** the schedule is generated, **Then** the parallel step's earlier start time propagates backward correctly so that both still end together.
 4. **Given** a dish with a parallel step, **When** the user views the schedule, **Then** the parallel step is visually distinguished from sequential steps (e.g., shown side-by-side or with a grouping indicator).
@@ -26,7 +26,7 @@ A user building a chicken noodle soup recipe wants to brine the chicken for 45 m
 
 ### User Story 2 — Edit or Remove a Parallel Step (Priority: P2)
 
-A user who has previously added a "Do Alongside" step wants to change its duration or delete it. They tap the parallel step card, see the same Edit / Delete / Do Alongside menu, choose Edit, update the duration, and the schedule recalculates. Alternatively they choose Delete and the step is removed, restoring the sequential timeline.
+A user who has previously added a "Do Alongside" step wants to change its duration or delete it. They tap the parallel step within the step group editor, choose Edit, update the duration, and the schedule recalculates. Alternatively they choose Delete (or tap "Remove") and the step is removed, restoring the sequential timeline.
 
 **Why this priority**: Parallel steps must be mutable like any other step. Without edit/delete, errors cannot be corrected and the feature is not production-ready.
 
@@ -69,7 +69,7 @@ During active cooking, a user following the live timer reaches a point where two
 
 ### Functional Requirements
 
-- **FR-001**: A user MUST be able to initiate a "Do Alongside" action from any step card within a dish via a contextual menu containing at minimum "Edit", "Delete", and "Do Alongside".
+- **FR-001**: A user MUST be able to initiate a "Do Alongside" action from any step group within a dish via a clearly labelled control on the step group. The same control surface MUST also provide access to "Edit" and "Delete" actions for existing parallel steps.
 - **FR-002**: A parallel step MUST share its end time with its anchor step; the scheduler MUST enforce this invariant automatically on every recalculation.
 - **FR-003**: The join point for any parallel group MUST always be the next sequential step in the dish; users MUST NOT need to specify the join point manually.
 - **FR-004**: Multiple steps MAY be attached as companions to the same anchor step (three or more steps converging at one join point).
@@ -88,6 +88,8 @@ During active cooking, a user following the live timer reaches a point where two
 - **Anchor Step**: The existing sequential step to which one or more companions are attached. Remains part of the parallel group alongside its companions.
 - **Companion Step**: A step created via "Do Alongside". Has its own name and duration. Belongs to exactly one parallel group. Its start time is calculated independently from the shared end time.
 - **Join Step**: The next sequential step after a parallel group, or the serve moment if the group is at the end of the dish. Begins only when all steps in the group are confirmed complete.
+
+> **Terminology note for developers**: The implementation uses a Stage/Track data model. The mapping is: a *step group* in UX terms = a **Stage** in the data model. An *anchor step + companion step(s)* together form the **Tracks** within that Stage. The *join step* is the first step of the next Stage. This spec uses plain-language UX terms; the implementation contracts use Stage/Track vocabulary.
 
 ## Success Criteria *(mandatory)*
 
